@@ -1,0 +1,33 @@
+
+doo dee doo - hashing out what a d interface to a multi_index implementation should look like.
+the boost docs seem to pay attention to several areas:
+* mutating the contents of the collection
+  - this needs paying attention; sans discipline one could easily violate another index. Example: ra index, ordered_unique index over a struct type. doing something like c[i].x = 1 could break one of the properties of the ordered index, and there's really no way to prevent this if opIndex returns a mutable item. For some reason, boost::multi_index also disallows c[i] = x syntax, not sure why, but will try to figure it out. So opIndex and anything else that exposes a [non value type] element of the container must return a const(T) (and for value types, the compiler automatically discards the const anyways, so you might as well keep it)
+  - great, so now we expose a range of const(T)'s, but we want to mutate our elements! boost::multi_index provides a kind of convoluted way to do this through the modify method - whose d equivalent might look something like this:
+
+  r.modify(delegate T(T t){
+    t.x++;
+    return t;
+  });
+
+  where r is a range into our collection c.
+  Our container is going to need to wrap a call to the delegate with checking
+  for whether other indeces were affected, and if they were, the element will need to be removed from the index and reinserted (or something like that). An example: for a Red-Black tree based index, this operation would have O(log N) performance. For a hash table based index, it would be somewhere between O(log N) and O(N), depending on implementation. But a user might not want to incur this overhead for a modification that obviously won't invalidate any index. We could provide a modifyAssumeSafe, but it seems rather the 'ticking time bomb' from a maintanence perspective.
+  A less general variant provided by boost::multi_index is replace(). In D-ish code it might look like
+
+  r.replace(new_t);
+
+  with the semantics that the current item in the range gets kicked out, and you can guess the rest. (note: this should correspond nicely with the OutputRange interface)
+  What are the semantic differences between replace and c[i] = new_t ? I'm wondering if the biggest difference might be that a random access iterator doesn't have all the context needed to perform the surrounding checking, though it seems unlikely. Constness? replace() requires new_t to be const, and opIndex can do the same thing (except const is stronger in D)
+
+* efficiency
+ - seriously, everything is exposed as a reference. Even modify's only real raison d'etre is to avoid having to move the element in question out of the container for to modify and then put it back in. But this is exactly what the semantics of c[i] = x would entail. In general, Andrei is (or has been, don't know if he's changed his mind lately) pushing the concept of sealed containers, which don't expose any reference to their elements. Kinda wondering about his rationale, as I don't know that he's explained it anywhere. Might relate to safeD or some other compiler implementation. Anyways, such would force read-modify-write paradigm on a multi_index impl, and modify loses its appeal to plain old c[i] = new_t. At least up to const issues.
+ - for some reason, random_access_index doesn't expose any sort of swap functionality, which doesn't make sense to me, because it does include such superfluous things as sort and merge. The code in there doesn't look all that special. But it seems swap would be a O(1) operation - it only affects this index, and nothing was added, removed, or modified, so no check is required.
+
+* exception safety
+ - since I don't really know what this is, I'm going to guess it has the most to do with: what happens when an exception gets thrown in *this* part of this operation? Suppose the delegate in my modify example throws halfway through. Now I'm stuck with a probably invalid element which could violate any number of index invariants. In this case, ahem, it will have to come OUT! All the.. bits of it! So double whammy - you don't get your cake (new_t), and you've lost the original element, too. In read-modify-write, you don't get your cake, of course, but the original element won't be affected.
+
+* convenience
+ - boost::multi_index actually provides some template magic for 'easily' specifying how to get the key out of the container element. They all come across as being unnecessary for a D impl - you get a superset of that functionality from std.functional's binaryFun and unaryFun alone.
+ - boost::multi_index provides the concept of a comparable key, which sounds useful and would require some actual effort. Nasty thing about it, though, is it requires use of functors with overloaded opCall
+ - something about taking a range into one index and converting it into a narrower range into another index? Sounds useful
