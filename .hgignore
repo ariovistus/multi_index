@@ -1,0 +1,6 @@
+; ignore object files
+syntax: glob
+*.o
+; ignore executables
+syntax: regexp
+/[^/.]*$
