@@ -139,3 +139,26 @@ ordered_index_[non_]unique( [tag,] KeyFromValue, Compare ):
 
     remove 
     removeKey ( Key )
+
+heap(KeyFromValue, Compare):
+
+    length 
+    front (  )
+    back (  )
+    empty
+    clear
+    opSlice
+
+    insert
+    stableInsert
+
+    removeAny
+    stableRemoveAny
+
+    removeFront
+    stableRemoveFront
+
+    removeBack
+    stableRemoveBack
+
+    remove

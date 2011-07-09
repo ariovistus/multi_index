@@ -10,10 +10,14 @@ module multi_index;
  *   KeyRange ?
  *  random access index
  *   insertAfter ? insertBefore ?
+ *   move semantics ?
  *  hashed index
  *  tagging
  *  other indeces? sparse matrix? heap?
  *  allocation?
+ *  dup
+ *  make reserve perform reserve on all appropriate indeces?
+ *  op ~ 
  */
 
 import std.array;
@@ -299,8 +303,7 @@ template Sequenced(){
                 }
 
             void removeFront(){
-                ThisNode* node = _removeFront();
-                _RemoveAllBut!N(node);
+                _RemoveAll(_front);
             }
 
             ThisNode* _removeBack()
@@ -320,39 +323,19 @@ template Sequenced(){
                 }
 
             void removeBack(){
-                ThisNode* node = _removeBack();
-                _RemoveAllBut!N(node);
+                _RemoveAll(_back);
             }
 
             alias removeBack removeAny;
 
             Range linearRemove(Range range)
                 in{
-                    // range had better belong to this container
-                    if(range._front !is _front && range._back !is _back){
-                        ThisNode* node = _front;
-                        while(node !is range._front){
-                            node = node.index!N.next;
-                        }
-                        assert(node is range._front);
-                    }
+                    // range belongs to this index
                 }body{
-                    if(range._front is _front){
-                        foreach(item; range){
-                            ThisNode* node = _removeFront();
-                            _RemoveAllBut!N(node);
-                        }
-                    }else if(range._back is _back){
-                        foreach(item; retro(range)){
-                            ThisNode* node = _removeBack();
-                            _RemoveAllBut!N(node);
-                        }
-                    }else{
-                        ThisNode* prev = range._front.index!N.prev;
-                        foreach(item; range){
-                            ThisNode* node = _removeNext(prev); // == node
-                            _RemoveAllBut!N(node);
-                        }
+                    while(!range.empty){
+                        ThisNode* f = range._front;
+                        range.popFront();
+                        _RemoveAll(f);
                     }
                     return Range(null,null);
                 }
@@ -1430,8 +1413,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     {
         auto n = _end.index!N.leftmost;
         auto result = n.value;
-        _RemoveAllBut!N(n);
-        n.index!N.remove(_end);
+        _RemoveAll(n);
         version(RBDoChecks)
             check();
         return result;
@@ -1445,8 +1427,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     void removeFront()
     {
         auto n = _end.index!N.leftmost;
-        _RemoveAllBut!N(n);
-        n.index!N.remove(_end);
+        _RemoveAll(n);
         version(RBDoChecks)
             check();
     }
@@ -1459,8 +1440,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     void removeBack()
     {
         auto n = _end.index!N.prev;
-        _RemoveAllBut!N(n);
-        n.index!N.remove(_end);
+        _RemoveAll(n);
         version(RBDoChecks)
             check();
     }
@@ -1545,8 +1525,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
             if(beg is _end || _less(e, key(beg.value)))
                 // no values are equal
                 continue;
-            _RemoveAllBut!N(beg);
-            beg.index!N.remove(_end);
+            _RemoveAll(beg);
             count++;
         }
 
@@ -1779,6 +1758,168 @@ template OrderedNonUnique(alias KeyFromValue="a", alias Compare = "a<b"){
 
 // end RBTree impl
 
+template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
+    template Inner(ThisNode, Value, size_t N){
+        alias TypeTuple!() NodeTuple;
+        alias TypeTuple!(N,KeyFromValue, Compare) IndexTuple;
+
+        mixin template NodeMixin(){
+            size_t _index;
+        }
+
+        mixin template IndexMixin(size_t N, alias KeyFromValue, alias Compare){
+            alias unaryFun!KeyFromValue key;
+            alias binaryFun!Compare less;
+
+            ThisNode*[] _heap;
+
+            static size_t p(size_t n) pure{
+                return n / 2;
+            }
+
+            static size_t l(size_t n) pure{
+                return 2*n + 1;
+            }
+
+            static size_t r(size_t n) pure{
+                return 2*n + 2;
+            }
+
+            void swapAt(size_t n1, size_t n2){
+                swap(_heap[n1].index!N._index, _heap[n2].index!N._index); 
+                swap(_heap[n1], _heap[n2]); 
+            }
+
+            void sift(size_t n){
+                auto k = key(_heap[n].value);
+                if(n > 0 && less(key(_heap[p(n)].value), k)){
+                    do{
+                        swapAt(n, p(n));
+                        n = p(n);
+                    }while(n > 0 && less(key(_heap[p(n)].value), k));
+                }else if(l(n) < node_count){
+                    auto ch = l(n);
+                    auto chk = key(_heap[ch].value);
+                    if (r(n) < node_count){
+                        auto rk = key(_heap[r(n)].value);
+                        if(less(chk, rk)){
+                            chk = rk;
+                            ch = r(n);
+                        }
+                    }
+                    while(l(n) < node_count && less(k,chk)){
+                        swapAt(n, ch);
+                        n = ch;
+                        ch = l(n);
+                        chk = key(_heap[ch].value);
+                        if (r(n) < node_count){
+                            auto rk = key(_heap[r(n)].value);
+                            if(less(chk, rk)){
+                                chk = rk;
+                                ch = r(n);
+                            }
+                        }
+                    }
+                }
+            }
+
+            /// Ends up performing a breadwise traversal (I think..)
+            /// Expose a bidirectional range interface.
+            struct Range{
+                ThisNode*[] _rng;
+
+                const(Value) front(){ return _rng[0].value; }
+
+                void popFront(){ _rng.popFront(); }
+
+                @property bool empty(){ return _rng.empty; }
+                @property size_t length(){ return _rng.length; }
+
+                const(Value) back(){ return _rng.back().value; }
+
+                void popBack(){ _rng.popBack(); }
+
+                Range save(){ return this; }
+            }
+
+            Range opSlice(){
+                return Range(_heap[0 .. node_count]);
+            }
+
+            @property size_t length(){
+                return node_count;
+            }
+
+            @property bool empty(){
+                return node_count == 0;
+            }
+
+            const(Value) front(){
+                return _heap[0].value;
+            }
+            const(Value) back(){
+                return _heap[node_count-1].value;
+            }
+            void clear(){
+                assert(0);
+            }
+
+            size_t capacity(){
+                return _heap.length;
+            }
+
+            void reserve(size_t count){
+                if(_heap.length < count){
+                    _heap.length = count;
+                }
+            }
+
+            size_t insert(SomeValue)(SomeValue value)
+            if(isImplicitlyConvertible!(SomeValue, const(Value)))
+            {
+                ThisNode* n = _InsertAllBut!N(value);
+                if(!n) return 0;
+                node_count++;
+                _Insert(n);
+                node_count--;
+                return 1;
+            }
+
+            void _Insert(ThisNode* node){
+                if(node_count == _heap.length){
+                    reserve(max(_heap.length*2+1, node_count+1));
+                }
+                _heap[node_count] = node;
+                _heap[node_count].index!N._index = node_count;
+                sift(node_count);
+            }
+
+            // todo stableInsert
+
+            void removeFront(){
+                _RemoveAll(_heap[0]);
+            }
+
+            void _Remove(ThisNode* node){
+                swapAt(node.index!N._index, node_count-1);
+                _heap[node_count-1] = null;
+                sift(node.index!N._index);
+            }
+            // todo stableRemoveFront
+            alias removeFront removeAny;
+            // todo stableRemoveAny
+
+
+            /// why would you do this? no idea
+            /// time O(1) + O(r(N))
+            void removeBack(){
+                _RemoveAllBut!N(_heap[node_count-1]);
+            }
+            /// todo stableRemoveBack
+        }
+    }
+}
+
 /// a hash table index
 template HashedUnique(alias KeyFromValue="a", alias hash = "??", alias Eq = "a==b"){
     template Inner(ThisNode, Value, size_t N){
@@ -1948,10 +2089,16 @@ denied:
         }else enum result = "";
     }
 
+    /// disattatch node from all indeces except index N
     void _RemoveAllBut(size_t N)(ThisNode* node){
         mixin(ForEachDoRemove!(0, N).result);
         node_count --;
     }
+
+    /// disattach node from all indeces.
+    // @@@BUG@@@ cannot pass length directly to _RemoveAllBut
+    enum _grr_bugs = IndexedBy.List.length;
+    alias _RemoveAllBut!(_grr_bugs) _RemoveAll;
 
     template ForEachAlias(size_t N,size_t index, alias X){
         alias X.Inner!(ThisNode,Value,N).Index!() Index;
@@ -1994,6 +2141,15 @@ struct S{
         return format("(%s %s)", i,j);
     }
 }
+
+int[] arr(Range)(Range r){
+    int[] result = new int[](r.length);
+    size_t j = 0;
+    foreach(e; r){
+        result[j++] = e;
+    }
+    return result;
+}
 void main(){
     /+
     alias MNode!(IndexedBy!(
@@ -2007,7 +2163,7 @@ void main(){
     n1.index!(1).left = n2;
     +/
     alias MultiIndexContainer!(IndexedBy!(Sequenced!(), 
-                OrderedNonUnique!("a"), RandomAccess!()),int) C;
+                OrderedNonUnique!("a"), RandomAccess!(), Heap!()),int) C;
 
     C i = new C;
     /+
@@ -2033,21 +2189,11 @@ void main(){
     i.index!(0).insert(7);
     i.index!(0).insert(8);
     i.index!(0).insert(6);
-    /+
-    writeln("[2,6]: ", array(i.index!(1).bounds!("[]",int,int)(2,6)));
-    writeln("[2,6): ", array(i.index!(1).bounds!("[)",int,int)(2,6)));
-    writeln("(2,6]: ", array(i.index!(1).bounds!("(]",int,int)(2,6)));
-    writeln("(2,6): ", array(i.index!(1).bounds!("()",int,int)(2,6)));
-    +/
+    writeln(i.index!(2).opIndex(3));
     writeln("sequenced: ", array(i.index!(0).opSlice()));
     writeln("ordered: ",array(i.index!(1).opSlice()));
-    int[] arr = new int[](i.length);
-    size_t j;
-    foreach(e; i.index!(2).opSlice()){
-        arr[j++] = e;
-    }
-    writeln("random access: ",arr);
-    writeln(i.index!(2).opIndex(3));
+    writeln("random access: ",arr(i.index!(2).opSlice()));
+    writeln("heap: ",arr(i.index!(3).opSlice()));
     //pragma(msg, Sequenced!().Inner!(N,int,0).Index!().IndexMixin);
         /+
     n1.next!0 = null;
