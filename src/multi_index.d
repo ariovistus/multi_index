@@ -9,6 +9,7 @@ module multi_index;
  *   special constructor for SortedRange?
  *   KeyRange ?
  *  random access index
+ *   insertAfter ? insertBefore ?
  *  hashed index
  *  tagging
  *  other indeces? sparse matrix? heap?
@@ -16,7 +17,7 @@ module multi_index;
  */
 
 import std.array;
-import std.algorithm: find;
+import std.algorithm: find, swap, copy, fill, max;
 import std.traits;
 import std.range;
 import std.metastrings;
@@ -377,9 +378,8 @@ template RandomAccess(){
         mixin template NodeMixin(){
         }
 
-        mixin template Index(size_t N){
+        mixin template IndexMixin(size_t N){
             ThisNode*[] ra;
-            size_t _length;
 
             struct Range{
                 ThisNode*[] ra;
@@ -401,11 +401,11 @@ template RandomAccess(){
             }
 
             Range opSlice (){
-                return Range(ra[0 .. _length]);
+                return Range(ra[0 .. node_count]);
             }
 
             Range opSlice(size_t a, size_t b){
-                return Range(ra[0 .. _length][a .. b]);
+                return Range(ra[0 .. node_count][a .. b]);
             }
 
             @property size_t length(){
@@ -435,57 +435,96 @@ template RandomAccess(){
             }
 
             const(Value) back(){
-                return ra[_length-1].value;
+                return ra[node_count-1].value;
             }
 
             void back(const(Value) value){
-                _replace(ra[_length-1], value);
+                _replace(ra[node_count-1], value);
             }
-
 
             void clear(){
                 assert(0);
             }
 
             const(Value) opIndex(size_t i){
-                return ra[0 .. _length][i].
+                return ra[0 .. node_count][i].value;
             }
 
             const(Value) opIndexAssign(size_t i, const(Value) value){
-                _replace(ra[0 .. _length][i], value);
-                return ra[0 .. _length][i].value;
+                _replace(ra[0 .. node_count][i], value);
+                return ra[0 .. node_count][i].value;
             }
 
             void swapAt( size_t i, size_t j){
-                auto r = ra[0 .. _length];
+                auto r = ra[0 .. node_count];
                 swap(r[i], r[j]);
             }
 
-            const(Value) removeAny(){
-                _RemoveAllBut!N(ra[_length-1]);
-                const(Value) value = ra[_length-1].value;
-                _length--;
-                clear(ra[_length]);
+            const(Value) removeBack(){
+                const(Value) value = ra[node_count-1].value;
+                _RemoveAllBut!N(ra[node_count-1]);
+                object.clear(ra[node_count]);
                 return value;
             }
 
-    removeAny  // removes element $-1 ?
-    stableRemoveAny
+            alias removeBack removeAny;
 
-    insertBack
-    insert
-    stableInsertBack 
+            void _Remove(ThisNode* n){
+                foreach(i, item; ra[0 .. node_count]){
+                    if(item is n){
+                        copy(ra[i+1 .. node_count], ra[i .. node_count-1]);
+                        ra[node_count-1] = null;
+                        return;
+                    }
+                }
+            }
 
-    removeBack
-    stableRemoveBack
+            // todo stableRemoveAny
+            // todo stableRemoveBack
 
-    insertAfter ( Range, stuff )  // not container primitive ?? eqiv to splice
-    insertBefore ( Range, stuff )  // not container primitive ?? eqiv to splice
+            size_t insertBack(SomeValue)(SomeValue value)
+            if(isImplicitlyConvertible!(SomeValue, const(Value)))
+            {
+                ThisNode* n = _InsertAllBut!N(value);
+                if (!n) return 0;
+                node_count--;
+                _Insert(n);
+                node_count++;
+                return 1;
+            }
 
-    linearRemove ( Range )
-    stableLinearRemove
+            void _Insert(ThisNode* node){
+                if (node_count >= ra.length){
+                    reserve(max(ra.length * 2 + 1, node_count+1));
+                }
+                ra[node_count] = node;
+            }
+
+            alias insertBack insert;
+            // todo stableInsertBack 
+
+            Range linearRemove(Range r){
+                size_t _length = node_count;
+                if( ra.ptr <= r.ra.ptr && r.ra.ptr < ra.ptr + _length){
+                    size_t rstart = r.ra.ptr - ra.ptr;
+                    size_t rend = rstart + r.length;
+                    size_t newlen = _length - (rend-rstart);
+                    while(!r.empty){
+                        _RemoveAllBut!N(r.ra[0]);
+                    }
+                    copy(ra[rend .. _length], ra[rstart .. newlen]);
+                    fill(ra[newlen .. _length], cast(ThisNode*) null);
+                    _length -= rend-rstart;
+                    return Range(ra[rstart .. _length]);
+                }else{
+                    return Range(ra[_length .. _length]);
+                }
+
+            }
+            // stableLinearRemove
         }
     }
+}
 
 // RBTree node impl. taken from std.container - that's Steven Schveighoffer's 
 // code - and modified to suit.
@@ -1892,8 +1931,8 @@ class MultiIndexContainer(IndexedBy, Value){
         ThisNode* node = alloc();
         node.value = value;
         mixin(ForEachCheckInsert!(0, N).result);
-        pragma(msg,ForEachDoInsert!(0, N).result);
         mixin(ForEachDoInsert!(0, N).result);
+        node_count++;
         return node;
 denied:
         return null;
@@ -1911,6 +1950,7 @@ denied:
 
     void _RemoveAllBut(size_t N)(ThisNode* node){
         mixin(ForEachDoRemove!(0, N).result);
+        node_count --;
     }
 
     template ForEachAlias(size_t N,size_t index, alias X){
@@ -1967,7 +2007,7 @@ void main(){
     n1.index!(1).left = n2;
     +/
     alias MultiIndexContainer!(IndexedBy!(Sequenced!(), 
-                OrderedNonUnique!("a")),int) C;
+                OrderedNonUnique!("a"), RandomAccess!()),int) C;
 
     C i = new C;
     /+
@@ -1993,10 +2033,21 @@ void main(){
     i.index!(0).insert(7);
     i.index!(0).insert(8);
     i.index!(0).insert(6);
-    writeln("[2,6]: ", array(i.index!(1).bounds!("[]")(2,6)));
+    /+
+    writeln("[2,6]: ", array(i.index!(1).bounds!("[]",int,int)(2,6)));
     writeln("[2,6): ", array(i.index!(1).bounds!("[)",int,int)(2,6)));
     writeln("(2,6]: ", array(i.index!(1).bounds!("(]",int,int)(2,6)));
     writeln("(2,6): ", array(i.index!(1).bounds!("()",int,int)(2,6)));
+    +/
+    writeln("sequenced: ", array(i.index!(0).opSlice()));
+    writeln("ordered: ",array(i.index!(1).opSlice()));
+    int[] arr = new int[](i.length);
+    size_t j;
+    foreach(e; i.index!(2).opSlice()){
+        arr[j++] = e;
+    }
+    writeln("random access: ",arr);
+    writeln(i.index!(2).opIndex(3));
     //pragma(msg, Sequenced!().Inner!(N,int,0).Index!().IndexMixin);
         /+
     n1.next!0 = null;
