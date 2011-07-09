@@ -1,5 +1,21 @@
 module multi_index;
 
+/**
+ * TODO:
+ *  ordered index
+ *   opIndex, opIndexAssign
+ *   compatible sorting criteria
+ *   move semantics?
+ *   special constructor for SortedRange?
+ *   KeyRange ?
+ *  random access index
+ *  hashed index
+ *  tagging
+ *  other indeces? sparse matrix? heap?
+ *  allocation?
+ */
+
+import std.array;
 import std.algorithm: find;
 import std.traits;
 import std.range;
@@ -171,11 +187,11 @@ template Sequenced(){
 
             /// Inserts stuff into the front of the sequence.
             /// will always succeed unless another index cannot
-            /// accept an element in stuff, in which case a
-            /// CannotInsertItemsException will be thrown
+            /// accept an element in stuff
             size_t insertFront(SomeRange)(SomeRange stuff)
                 if(isInputRange!SomeRange && 
-                        isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+                        isImplicitlyConvertible!(ElementType!SomeRange, 
+                            const(Value)))
                 {
                     if(stuff.empty) return 0;
                     size_t count = 0;
@@ -353,16 +369,123 @@ template Sequenced(){
 /// A random access index.
 template RandomAccess(){
     template Inner(ThisNode, Value, size_t N){
-        template Index(){
-            alias RandomAccessIndex!(ThisNode, Value, N) Index;
-        }
+        alias TypeTuple!() NodeTuple;
+        alias TypeTuple!(N) IndexTuple;
         /// node implementation (ish)
 
         // all the overhead is in the index
-        mixin template NodeMixin(size_t N){
+        mixin template NodeMixin(){
+        }
+
+        mixin template Index(size_t N){
+            ThisNode*[] ra;
+            size_t _length;
+
+            struct Range{
+                ThisNode*[] ra;
+
+                const(Value) front(){ return ra[0].value; }
+
+                void popFront(){ ra.popFront(); }
+
+                @property bool empty(){ return ra.empty; }
+                @property size_t length(){ return ra.length; }
+
+                const(Value) back(){ return ra.back().value; }
+
+                void popBack(){ ra.popBack(); }
+
+                Range save(){ return this; }
+
+                const(Value) opIndex(size_t i){ return ra[i].value; }
+            }
+
+            Range opSlice (){
+                return Range(ra[0 .. _length]);
+            }
+
+            Range opSlice(size_t a, size_t b){
+                return Range(ra[0 .. _length][a .. b]);
+            }
+
+            @property size_t length(){
+                return node_count;
+            }
+
+            @property bool empty(){
+                return node_count == 0;
+            }
+
+            size_t capacity(){
+                return ra.length;
+            }
+
+            void reserve(size_t count){
+                if(ra.length < count){
+                    ra.length = count;
+                }
+            }
+
+            const(Value) front(){
+                return ra[0].value;
+            }
+
+            void front(const(Value) value){
+                _replace(ra[0], value);
+            }
+
+            const(Value) back(){
+                return ra[_length-1].value;
+            }
+
+            void back(const(Value) value){
+                _replace(ra[_length-1], value);
+            }
+
+
+            void clear(){
+                assert(0);
+            }
+
+            const(Value) opIndex(size_t i){
+                return ra[0 .. _length][i].
+            }
+
+            const(Value) opIndexAssign(size_t i, const(Value) value){
+                _replace(ra[0 .. _length][i], value);
+                return ra[0 .. _length][i].value;
+            }
+
+            void swapAt( size_t i, size_t j){
+                auto r = ra[0 .. _length];
+                swap(r[i], r[j]);
+            }
+
+            const(Value) removeAny(){
+                _RemoveAllBut!N(ra[_length-1]);
+                const(Value) value = ra[_length-1].value;
+                _length--;
+                clear(ra[_length]);
+                return value;
+            }
+
+    removeAny  // removes element $-1 ?
+    stableRemoveAny
+
+    insertBack
+    insert
+    stableInsertBack 
+
+    removeBack
+    stableRemoveBack
+
+    insertAfter ( Range, stuff )  // not container primitive ?? eqiv to splice
+    insertBefore ( Range, stuff )  // not container primitive ?? eqiv to splice
+
+    linearRemove ( Range )
+    stableLinearRemove
         }
     }
-}
 
 // RBTree node impl. taken from std.container - that's Steven Schveighoffer's 
 // code - and modified to suit.
@@ -902,7 +1025,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     alias binaryFun!Compare _less;
     alias unaryFun!KeyFromValue key;
 
-    private auto _add(Node n)
+    auto _add(Node n)
     {
         bool added = true;
 
@@ -914,9 +1037,11 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         {
             Node newParent = _end.index!N.left;
             Node nxt = void;
+            auto k = key(n.value);
             while(true)
             {
-                if(_less(n.value, newParent.value))
+                auto pk = key(newParent.value);
+                if(_less(k, pk))
                 {
                     nxt = newParent.index!N.left;
                     if(nxt is null)
@@ -932,7 +1057,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
                 {
                     static if(!allowDuplicates)
                     {
-                        if(!_less(newParent.value, n.value))
+                        if(!_less(pk, k))
                         {
                             added = false;
                             break;
@@ -984,9 +1109,10 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         }
     }
 
-    void _Insert(Node n, Node cursor){
+    static if(allowDuplicates) alias _add _Insert;
+    else void _Insert(Node n, Node cursor){
         if(cursor !is null){
-            if (_less(n.value, cursor.value)){
+            if (_less(key(n.value), key(cursor.value))){
                 cursor.index!N.left = n;
             }else{
                 cursor.index!N.right = n;
@@ -1071,11 +1197,13 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         {
             Node cur = _end.index!N.left;
             Node result = null;
+            auto k = key(e);
             while(cur)
             {
-                if(_less(cur.value, e))
+                auto ck = key(cur.value);
+                if(_less(ck, k))
                     cur = cur.index!N.right;
-                else if(_less(e, cur.value))
+                else if(_less(k, ck))
                     cur = cur.index!N.left;
                 else
                 {
@@ -1089,11 +1217,13 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         else
         {
             Node cur = _end.index!N.left;
+            auto k = key(e);
             while(cur)
             {
-                if(_less(cur.value, e))
+                auto ck = key(cur.value);
+                if(_less(ck, k))
                     cur = cur.index!N.right;
-                else if(_less(e, cur.value))
+                else if(_less(k, ck))
                     cur = cur.index!N.left;
                 else
                     return cur;
@@ -1107,12 +1237,14 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         Node cur = _end.index!N.left;
         par = null;
         found = false;
+        auto k = key(e);
         while(cur)
         {
+            auto ck = key(cur.value);
             par = cur;
-            if(_less(cur.value, e)){
+            if(_less(ck, k)){
                 cur = cur.index!N.right;
-            }else if(_less(e, cur.value)){
+            }else if(_less(k, ck)){
                 cur = cur.index!N.left;
             }else{
                 found = true;
@@ -1215,7 +1347,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
 
             static if(!allowDuplicates){
                 if(p){
-                    if (_less(n.value, p.value)){
+                    if (_less(key(n.value), key(p.value))){
                         p.index!N.left = n;
                     }else{
                         p.index!N.right = n;
@@ -1364,14 +1496,14 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     --------------------
     +/
     size_t removeKey(U)(U[] elems...)
-    if(isImplicitlyConvertible!(U, Elem))
+    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
     {
         size_t count = 0;
 
         foreach(e; elems)
         {
             auto beg = _firstGreaterEqual(e);
-            if(beg is _end || _less(e, beg.value))
+            if(beg is _end || _less(e, key(beg.value)))
                 // no values are equal
                 continue;
             _RemoveAllBut!N(beg);
@@ -1394,14 +1526,15 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     // find the first node where the value is > e
-    private Node _firstGreater(Elem e)
+    private Node _firstGreater(U)(U e)
+    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
     {
         // can't use _find, because we cannot return null
         auto cur = _end.index!N.left;
         auto result = _end;
         while(cur)
         {
-            if(_less(e, cur.value))
+            if(_less(e, key(cur.value)))
             {
                 result = cur;
                 cur = cur.index!N.left;
@@ -1413,14 +1546,15 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     // find the first node where the value is >= e
-    private Node _firstGreaterEqual(Elem e)
+    private Node _firstGreaterEqual(U)(U e)
+    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
     {
         // can't use _find, because we cannot return null.
         auto cur = _end.index!N.left;
         auto result = _end;
         while(cur)
         {
-            if(_less(cur.value, e))
+            if(_less(key(cur.value), e))
                 cur = cur.index!N.right;
             else
             {
@@ -1438,7 +1572,8 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range upperBound(Elem e)
+    Range upperBound(U)(U e)
+    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
     {
         return Range(_firstGreater(e), _end);
     }
@@ -1449,7 +1584,8 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range lowerBound(Elem e)
+    Range lowerBound(U)(U e)
+    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
     {
         return Range(_end.index!N.leftmost, _firstGreaterEqual(e));
     }
@@ -1462,13 +1598,13 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      */
     Range equalRange(Elem e)
     {
-        auto beg = _firstGreaterEqual(e);
-        if(beg is _end || _less(e, beg.value))
+        auto beg = _firstGreaterEqual(key(e));
+        if(beg is _end || _less(key(e), key(beg.value)))
             // no values are equal
             return Range(beg, beg);
         static if(allowDuplicates)
         {
-            return Range(beg, _firstGreater(e));
+            return Range(beg, _firstGreater(key(e)));
         }
         else
         {
@@ -1476,6 +1612,21 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
             // so we just get the next node.
             return Range(beg, beg.index!N.next);
         }
+    }
+
+    Range bounds(string boundaries = "[]", U,V)(U lower, V upper)
+        if(isImplicitlyConvertible!(U, typeof(key(Elem.init))) &&
+           isImplicitlyConvertible!(V, typeof(key(Elem.init))))
+    {
+        static if(boundaries == "[]"){
+            return Range(_firstGreaterEqual(lower), _firstGreater(upper));
+        }else static if(boundaries == "[)"){
+            return Range(_firstGreaterEqual(lower), _firstGreaterEqual(upper));
+        }else static if(boundaries == "(]"){
+            return Range(_firstGreater(lower), _firstGreater(upper));
+        }else static if(boundaries == "()"){
+            return Range(_firstGreater(lower), _firstGreaterEqual(upper));
+        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
     }
 
     version(RBDoChecks)
@@ -1523,12 +1674,12 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
                 Node next = n.next;
                 static if(allowDuplicates)
                 {
-                    if(next !is _end && _less(next.value, n.value))
+                    if(next !is _end && _less(key(next.value), key(n.value)))
                         throw new Exception("ordering invalid at path " ~ path);
                 }
                 else
                 {
-                    if(next !is _end && !_less(n.value, next.value))
+                    if(next !is _end && !_less(key(n.value), key(next.value)))
                         throw new Exception("ordering invalid at path " ~ path);
                 }
                 if(n.color == n.color.Red)
@@ -1575,14 +1726,16 @@ template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
 }
 
 /// A red black tree index
-template OrderedNonUnique(alias KeyFromValue="a", alias less = "a<b"){
-    template Index(ThisNode, Value, size_t N){
-        alias OrderedIndex!(ThisNode, Value, N, KeyFromValue, less, false) 
-            Index;
-    }
+template OrderedNonUnique(alias KeyFromValue="a", alias Compare = "a<b"){
+    template Inner(ThisNode, Value, size_t N){
+        alias TypeTuple!(N, true, KeyFromValue, Compare) IndexTuple;
+        alias OrderedIndex IndexMixin;
 
-    alias OrderedNodeImpl!(ThisNode, Value, KeyFromValue, less, false) NodeImpl;
-    alias NodeImpl.NodeMixin NodeMixin;
+        enum IndexCtorMixin = "_end = alloc();";
+        /// node implementation (ish)
+        alias TypeTuple!(N) NodeTuple;
+        alias OrderedNodeMixin NodeMixin;
+    }
 }
 
 // end RBTree impl
@@ -1664,13 +1817,6 @@ struct MNode(IndexedBy, Value){
 }
 
 
-template RandomAccessIndex(ThisNode,Value, size_t N){
-    mixin template Index(size_t N){
-        Array!(ThisNode*) ra;
-        // todo!
-    }
-}
-
 
 template HashedIndex(ThisNode,Value, size_t N, alias KeyFromValue, alias Hash, alias Eq, bool unique){
     mixin template Index(size_t N){
@@ -1746,6 +1892,7 @@ class MultiIndexContainer(IndexedBy, Value){
         ThisNode* node = alloc();
         node.value = value;
         mixin(ForEachCheckInsert!(0, N).result);
+        pragma(msg,ForEachDoInsert!(0, N).result);
         mixin(ForEachDoInsert!(0, N).result);
         return node;
 denied:
@@ -1798,6 +1945,15 @@ denied:
 
 import std.array;
 import std.stdio;
+import std.string: format;
+
+struct S{
+    int i;
+    int j;
+    string toString()const{
+        return format("(%s %s)", i,j);
+    }
+}
 void main(){
     /+
     alias MNode!(IndexedBy!(
@@ -1810,17 +1966,37 @@ void main(){
     n1.index!(0).next = n2;
     n1.index!(1).left = n2;
     +/
-    alias MultiIndexContainer!(IndexedBy!(Sequenced!(), OrderedUnique!()),int) Ints;
+    alias MultiIndexContainer!(IndexedBy!(Sequenced!(), 
+                OrderedNonUnique!("a")),int) C;
 
-    Ints i = new Ints;
-    i.index!(1).insert(6);
-    i.index!(1).insert(5);
-    i.index!(1).insert(4);
-    i.index!(1).insert(3);
-    i.index!(1).insert(2);
-    i.index!(1).insert(1);
+    C i = new C;
+    /+
+    i.index!(1).insert(S(1,1));
+    i.index!(1).insert(S(0,2));
+    i.index!(1).insert(S(-1,2));
+    i.index!(1).insert(S(3,3));
+    i.index!(1).insert(S(2,40));
+    i.index!(1).insert(S(1,5));
     writeln(array(i.index!(0).opSlice()));
     writeln(array(i.index!(1).opSlice()));
+    i.index!(1).removeKey(3);
+    writeln(array(i.index!(0).opSlice()));
+    writeln(array(i.index!(1).opSlice()));
+    +/
+    i.index!(0).insert(2);
+    i.index!(0).insert(5);
+    i.index!(0).insert(5);
+    i.index!(0).insert(4);
+    i.index!(0).insert(3);
+    i.index!(0).insert(1);
+    i.index!(0).insert(9);
+    i.index!(0).insert(7);
+    i.index!(0).insert(8);
+    i.index!(0).insert(6);
+    writeln("[2,6]: ", array(i.index!(1).bounds!("[]")(2,6)));
+    writeln("[2,6): ", array(i.index!(1).bounds!("[)",int,int)(2,6)));
+    writeln("(2,6]: ", array(i.index!(1).bounds!("(]",int,int)(2,6)));
+    writeln("(2,6): ", array(i.index!(1).bounds!("()",int,int)(2,6)));
     //pragma(msg, Sequenced!().Inner!(N,int,0).Index!().IndexMixin);
         /+
     n1.next!0 = null;
