@@ -1,3 +1,229 @@
+/**
+A port of Joaquin M Lopez Munoz' _multi_index library.
+
+Source: something somewhere?
+Macros: 
+TEXTWITHCOMMAS = $0
+Copyright: Red-black tree code copyright (C) 2008- by Steven Schveighoffer. 
+Other code copyright 2011- Ellery Newcomer. 
+All rights reserved by the respective holders.
+
+License: Distributed under the Boost Software License, Version 1.0.
+(See accompanying file LICENSE_1_0.txt or copy at $(WEB
+boost.org/LICENSE_1_0.txt)).
+
+Authors: Steven Schveighoffer, Ellery Newcomer
+
+Introduction:
+A standard container maintains its elements in a specific structure which 
+allows it to offer interesting or useful access to its elements. However,
+sometimes a programmer needs functionality which is not offered by a single
+collection type. Faced with such a need, a programmer must maintain auxiliary 
+containers, either of duplicated elements or of pointers to elements of the 
+primary container.
+In either solution, keeping the parallel containers synchronized quickly 
+becomes a pain, and may introduce inefficiencies in time or memory complexity.
+
+Into this use case steps multi_index. It allows the user to specify multiple
+<i>indeces</i> on the container elements, each of which provides interesting
+access functionality. A multi_index container will automatically keep all 
+indeces synchronized over any insertion, removal, or replacement operation 
+performed on any one index.  Each index must define how to perform auxiliary 
+insertion, removal, and replacement, 
+which may have equal or better time complexity than those exposed to the user.
+
+Each index will typically require ($(D N * ptrsize * k)) additional bytes of 
+memory, for some k < 4
+
+The following index types are provided:
+$(BOOKTABLE,
+
+$(TR $(TH Index) $(TH Description))
+
+$(TR $(TDNW $(D Sequenced)) $(TD Provides a doubly linked list view - exposes 
+fast access to the front and back of the index.  Default insertion inserts to 
+the back of the index $(BR)
+
+$(TEXTWITHCOMMAS Usage:)
+-----
+alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), ...)) C;
+C c = new C;
+c.index!0 .insert(0); // access the index directly
+c.index!0 .insert(1);
+auto i0 = c.get_index!0; // or via a helper class (recommended)
+assert(array(i0[]) == [0,1]); // assumes no index refused these elements
+i0.insertFront([3,4,5]);
+assert(array(i0[]) == [3,4,5,0,1]); // ditto
+i0.removeAny();
+assert(array(i0[]) == [3,4,5,0]);
+i0.removeFront();
+assert(array(i0[]) == [3,4,5,0]);
+-----
+$(TEXTWITHCOMMAS Complexities:)
+$(BOOKTABLE, $(TR $(TH) $(TH))
+$(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
+i(n) = 1 for front and back insertion
+))) 
+$(TR $(TD Removal) $(TD $(TEXTWITHCOMMAS 
+d(n) = 1 for front, back, and auxiliary removal
+)))
+$(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
+r(n) = 1 for auxiliary replacement 
+))))
+
+))
+
+$(TR $(TDNW $(D RandomAccess)) $(TD Provides a random access view - exposes an
+array-like access to container elements. Default insertion inserts to the back of the index $(BR)
+
+$(TEXTWITHCOMMAS Complexities:)
+$(BOOKTABLE, $(TR $(TH) $(TH))
+$(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
+i(n) = 1 (amortized) for back insertion, n otherwise 
+))) 
+$(TR $(TD Removal) $(TD $(TEXTWITHCOMMAS 
+d(n) = 1 for back removal, n otherwise 
+)))
+$(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
+r(n) = 1 
+))))
+
+))
+
+$(TR $(TDNW $(D Ordered, OrderedUnique, OrderedNonUnique)) $(TD Provides a 
+red black tree view - keeps container elements in order defined by predicates 
+KeyFromValue and Compare. 
+Unique variant will cause the container to refuse 
+insertion of an item if an equivalent item already exists in the container.
+
+$(TEXTWITHCOMMAS Complexities:)
+$(BOOKTABLE, $(TR $(TH) $(TH))
+$(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
+i(n) = log(n) $(BR)
+))) 
+$(TR $(TD Removal) $(TD $(TEXTWITHCOMMAS 
+d(n) = log(n) $(BR)
+)))
+$(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
+r(n) = 1 if the element's position does not change, log(n) otherwise 
+))))
+
+))
+
+$(TR $(TDNW $(D Hashed, HashedUnique, HashedNonUnique)) $(TD Provides a 
+hash table view - exposes fast access to every element of the container, 
+given key defined by predicates KeyFromValue, Hash, and Eq.
+Unique variant will cause the container to refuse 
+insertion of an item if an equivalent item already exists in the container.
+
+$(TEXTWITHCOMMAS Complexities:)
+$(BOOKTABLE, $(TR $(TH) $(TH))
+$(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
+i(n) = 1 average, n worst case $(BR)
+))) 
+$(TR $(TD Removal) $(TD $(TEXTWITHCOMMAS 
+d(n) = 1 for auxiliary removal, otherwise 1 average, n worst case $(BR)
+)))
+$(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
+r(n) = 1 if the element's position does not change, log(n) otherwise 
+))))
+
+))
+
+$(TR $(TDNW $(D Heap)) $(TD Provides a max heap view - exposes fast access to 
+the largest element in the container as defined by predicates KeyFromValue 
+and Compare.
+
+Complexity
+
+i(n) = log(n) $(BR)
+d(n) = log(n) $(BR)
+r(n) = 1 if the element's position does not change, log(N) otherwise $(BR)))
+
+)
+
+Mutability:
+Providing multiple indeces to the same data does introduce some complexities, 
+though. Consider:
+-----
+alias MultiIndexContainer!(Tuple!(int,string), IndexedBy!(RandomAccess!(), OrderedUnique!("a[1]"))) C;
+
+C c = new C;
+
+c.insert(tuple(1,"a"));
+c.insert(tuple(2,"b"));
+
+c[1][1] = "a"; // bad! index 1 now contains duplicates and is in invalid state! 
+-----
+In general, the container must either require the user 
+not to perform any damning operation on its elements (which likely will entail 
+paranoid and continual checking of the validity of its indeces), or else not 
+provide a mutable view of its elements. multi_index chooses the latter.
+
+For operations which are sure not to invalidate any index, one might simply 
+cast away the constness of the returned element, as elements are not stored 
+with special constness, though we don't recommended this on the grounds of
+aesthetics (it's ew) and maintainability (if the code changes, it's a ticking 
+time bomb).
+
+Otherwise, the user must be limited to modification operations which the 
+indeces can detect and perform any fixups for (or possibly reject). Currently 
+that's remove/modify/insert (todo: boost::_multi_index exposes per-index 
+replace and modify functions - shall 
+we provide these also? issue: modify exposes a reference to container's 
+elements) 
+
+Efficiency:
+
+To draw on an example from boost::_multi_index, suppose a collection of 
+Tuple!(int,int) needs to be kept in sorted order by both elements of the tuple.
+This might be accomplished by the following:
+------
+import std.container;
+alias RedBlackTree!(Tuple!(int,int), "a[0] < b[0]") T1;
+alias RedBlackTree!(Tuple!(int,int)*, "(*a)[1] < (*b)[1]") T2;
+
+T1 tree1;
+T2 tree2;
+------
+
+Insertion remains straightforward
+------
+tree1.insert(item);
+tree2.insert(&item);
+------
+However removal introduces some inefficiency
+------
+tree1.remove(item);
+tree2.remove(&item); // requires a log(n) search, followed by a potential log(n) rebalancing
+------
+Munoz suggests making the element type of T2 an iterator of T1 for to obviate
+the need for the second search. However, this is not possible in D, as D 
+espouses ranges rather than indeces. (As a side note, Munoz proceeds to point 
+out that the iterator solution will require at minimum (N * ptrsize) more bytes 
+of memory than will _multi_index, so we needn't lament over this fact.)
+
+Our approach:
+------
+alias MultiIndexContainer!(Tuple!(int,int), 
+        IndexedBy!(OrderedUnique!("a[0]"), 
+            OrderedUnique!("a[1]"))) T;
+
+T t = new T;
+------
+
+makes insertion and removal somewhat simpler:
+
+------
+t.insert(item);
+t.remove(item);
+------
+
+and removal will not perform a log(n) search on the second index 
+(rebalancing can't be avoided).
+
+
+ */
 module multi_index;
 
 /**
@@ -17,40 +243,50 @@ module multi_index;
  *  allocation?
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
+ *  expose indeces as standalone structs
+ *  replace functionality
+ *  clear functionality
  *  op ~ 
  */
 
 import std.array;
-import std.algorithm: find, swap, copy, fill, max;
-import std.traits;
 import std.range;
-import std.metastrings;
-import replace;
+import std.exception: enforce;
+import std.algorithm: find, swap, copy, fill, max;
+import std.traits: isImplicitlyConvertible;
+import std.metastrings: Format, toStringNow;
+import replace: Replace;
 import std.typetuple: TypeTuple;
-import std.functional;
+import std.functional: unaryFun, binaryFun;
 
 /// A doubly linked list index.
 template Sequenced(){
+    // dam you, ddoc
+    /// _
     template Inner(ThisNode, Value, size_t N){
         alias TypeTuple!(N) IndexTuple;
         alias TypeTuple!(N) NodeTuple;
 
-        /// node implementation (ish)
-
+        // node implementation 
         mixin template NodeMixin(size_t N){
             typeof(this)* next, prev;
         }
 
-        // index implementation 
-
-        /// mixin requirements: whatever mixes this in better have
-        /// ThisNode aliased to the node type and Value aliased to the 
-        /// value type and available symbol[ish]s _InsertAllBut!N, _replace, 
-        /// _RemoveAllBut!N, node_count
+ /// index implementation 
+ ///
+ /// Requirements: the following symbols must be  
+ /// defined in the scope in which this index is mixed in:
+ ///
+ // dangit, ddoc, show my single starting underscore!
+ /// ThisNode, Value, __InsertAllBut!N, __InsertAll,  __Replace, 
+ /// __RemoveAllBut!N, node_count
         mixin template IndexMixin(size_t N){
             ThisNode* _front, _back;
 
-            /// implement the BidirectionalRange interface
+/**
+Defines the index' primary range, which embodies a
+bidirectional range 
+*/
             struct Range{
                 ThisNode* _front, _back;
 
@@ -75,24 +311,46 @@ template Sequenced(){
                 }
             }
 
+/**
+Returns the number of elements in the container.
+
+Complexity: $(BIGOH 1).
+*/
             @property size_t length(){
                 return node_count;
             }
 
+/**
+Property returning $(D true) if and only if the container has no
+elements.
+
+Complexity: $(BIGOH 1)
+*/
             @property bool empty(){
                 return node_count == 0;
             }
 
+/**
+Fetch a range that spans all the elements in the container.
+
+Complexity: $(BIGOH 1)
+*/
             Range opSlice(){
                 return Range(_front, _back);
             }
 
+/**
+Complexity: $(BIGOH 1)
+*/ 
             const(Value) front(){
                 return _front.value;
             }
 
+/**
+Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
+*/ 
             void front(const(Value) value){
-                _replace(_front, value);
+                _Replace(_front, value);
             }
 
             void _insertNext(ThisNode* node, ThisNode* prev) nothrow
@@ -145,12 +403,20 @@ template Sequenced(){
                     return prev;
                 }
 
+            /**
+             * Complexity: $(BIGOH 1)
+             */
             const(Value) back(){
                 return _back.value;
             }
+
+            /**
+             * Complexity: $(BIGOH r(n))
+             */
             void back(const(Value) value){
-                _replace(_back, value);
+                _Replace(_back, value);
             }
+
             void clear(){
                 // todo
                 assert (0);
@@ -190,9 +456,14 @@ template Sequenced(){
                     return true;
                 }
 
-            /// Inserts stuff into the front of the sequence.
-            /// will always succeed unless another index cannot
-            /// accept an element in stuff
+/++
+Inserts every element of stuff not rejected by another index into the front 
+of the index.
+Returns:
+The number of elements inserted.
+Complexity: $(BIGOH n $(SUB stuff) * i(n)); $(BR) $(BIGOH n $(SUB stuff)) for 
+this index
++/
             size_t insertFront(SomeRange)(SomeRange stuff)
                 if(isInputRange!SomeRange && 
                         isImplicitlyConvertible!(ElementType!SomeRange, 
@@ -218,13 +489,12 @@ template Sequenced(){
                     return count;
                 }
 
-            /// Inserts stuff into the front of the sequence.
-            /// inserts as many elements of stuff as possible, returning
-            /// a range of the items which could not be inserted
-            // auto insertFront_BestEffort
-
-            /// Inserts value into the front of the sequence, if no other
-            /// index rejects value
+/++
+Inserts value into the front of the sequence, if no other index rejects value
+Returns:
+The number if elements inserted into the index.
+Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
++/
             size_t insertFront(SomeValue)(SomeValue value)
                 if(isImplicitlyConvertible!(SomeValue, const(Value))){
                     ThisNode* node = _InsertAllBut!N(value);
@@ -237,19 +507,32 @@ template Sequenced(){
             // stableInsert
             // todo
             // stableInsertFront
-            /// inserts stuff into the front of the sequence
-            size_t insertBack (SomeRange)(SomeRange range)
+/++
+Inserts every element of stuff not rejected by another index into the back 
+of the index.
+Returns:
+The number of elements inserted.
+Complexity: $(BIGOH n $(SUB stuff) * i(n)); $(BR) $(BIGOH n $(SUB stuff)) for 
+this index
++/
+            size_t insertBack (SomeRange)(SomeRange stuff)
                 if(isInputRange!SomeRange && 
                         isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
                 {
                     size_t count = 0;
 
-                    foreach(item; range){
+                    foreach(item; stuff){
                         count += insertBack(item);
                     }
                     return count;
                 }
 
+/++
+Inserts value into the back of the sequence, if no other index rejects value
+Returns:
+The number if elements inserted into the index.
+Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
++/
             size_t insertBack(SomeValue)(SomeValue value)
                 if(isImplicitlyConvertible!(SomeValue, const(Value))){
                     ThisNode* node = _InsertAllBut!N(value);
@@ -258,6 +541,9 @@ template Sequenced(){
                     return 1;
                 }
 
+/++
+Forwards to insertBack
++/
             alias insertBack insert;
             /+
                 todo
@@ -275,8 +561,7 @@ template Sequenced(){
                 stableInsertAfter
             +/
 
-            /// reckon we'll trust n is somewhere between
-            /// _front and _back
+            // reckon we'll trust n is somewhere between _front and _back
             void _Remove(ThisNode* n){
                 if(n is _front){
                     _removeFront();
@@ -302,6 +587,11 @@ template Sequenced(){
                     return n;
                 }
 
+/++
+Removes the value at the front of the index from the container. 
+Precondition: $(D !empty)
+Complexity: $(BIGOH d(n)); $(BIGOH 1) for this index
++/
             void removeFront(){
                 _RemoveAll(_front);
             }
@@ -322,19 +612,31 @@ template Sequenced(){
                     return n;
                 }
 
+/++
+Removes the value at the back of the index from the container. 
+Precondition: $(D !empty)
+Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
++/
             void removeBack(){
                 _RemoveAll(_back);
             }
-
+/++
+Forwards to removeBack
++/
             alias removeBack removeAny;
 
-            Range linearRemove(Range range)
+/++
+Removes the values of r from the container.
+Precondition: r belongs to this index
+Complexity: $(BIGOH n $(SUB r) * d(n)).
++/
+            Range linearRemove(Range r)
                 in{
                     // range belongs to this index
                 }body{
-                    while(!range.empty){
-                        ThisNode* f = range._front;
-                        range.popFront();
+                    while(!r.empty){
+                        ThisNode* f = r._front;
+                        r.popFront();
                         _RemoveAll(f);
                     }
                     return Range(null,null);
@@ -352,19 +654,33 @@ template Sequenced(){
 
 /// A random access index.
 template RandomAccess(){
+    /// _
     template Inner(ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N) IndexTuple;
-        /// node implementation (ish)
 
+        // node implementation 
         // all the overhead is in the index
         mixin template NodeMixin(){
         }
 
+        /// index implementation 
+        ///
+        /// Requirements: the following symbols must be  
+        /// defined in the scope in which this index is mixed in:
+        ///
+        // dangit, ddoc, show my single starting underscore!
+        /// ThisNode, Value, __InsertAllBut!N, __InsertAll,  __Replace, 
+        /// __RemoveAllBut!N, node_count
         mixin template IndexMixin(size_t N){
             ThisNode*[] ra;
 
+            /// Defines the index' primary range, which embodies a
+            /// random access range 
             struct Range{
+                // storing a slice is probably really dumb, since
+                // it requires pointer comparison to figure out where
+                // in the original array the slice is.
                 ThisNode*[] ra;
 
                 const(Value) front(){ return ra[0].value; }
@@ -383,71 +699,137 @@ template RandomAccess(){
                 const(Value) opIndex(size_t i){ return ra[i].value; }
             }
 
+/**
+Fetch a range that spans all the elements in the container.
+
+Complexity: $(BIGOH 1)
+*/
             Range opSlice (){
                 return Range(ra[0 .. node_count]);
             }
 
+/**
+Fetch a range that spans all the elements in the container from
+index $(D a) (inclusive) to index $(D b) (exclusive).
+Preconditions: a <= b && b <= length
+
+Complexity: $(BIGOH 1)
+*/
             Range opSlice(size_t a, size_t b){
-                return Range(ra[0 .. node_count][a .. b]);
+                enforce(a <= b && b <= length);
+                return Range(ra[a .. b]);
             }
 
+/**
+Returns the number of elements in the container.
+
+Complexity: $(BIGOH 1).
+*/
             @property size_t length(){
                 return node_count;
             }
 
+/**
+Property returning $(D true) if and only if the container has no elements.
+
+Complexity: $(BIGOH 1)
+*/
             @property bool empty(){
                 return node_count == 0;
             }
 
-            size_t capacity(){
+/**
+Returns the _capacity of the index, which is the length of the
+underlying store 
+*/
+            @property size_t capacity(){
                 return ra.length;
             }
 
+/**
+Ensures sufficient capacity to accommodate $(D n) elements.
+
+Postcondition: $(D capacity >= n)
+
+Complexity: $(BIGOH ??) if $(D e > capacity),
+otherwise $(BIGOH 1).
+*/
             void reserve(size_t count){
                 if(ra.length < count){
                     ra.length = count;
                 }
             }
 
+/**
+Complexity: $(BIGOH 1)
+*/
             const(Value) front(){
                 return ra[0].value;
             }
 
+/**
+Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
+*/
             void front(const(Value) value){
-                _replace(ra[0], value);
+                _Replace(ra[0], value);
             }
 
+/**
+Complexity: $(BIGOH 1)
+*/
             const(Value) back(){
                 return ra[node_count-1].value;
             }
 
+/**
+Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
+*/
             void back(const(Value) value){
-                _replace(ra[node_count-1], value);
+                _Replace(ra[node_count-1], value);
             }
-
+/// ??
             void clear(){
                 assert(0);
             }
 
+/**
+Preconditions: i < length
+Complexity: $(BIGOH 1)
+*/
             const(Value) opIndex(size_t i){
-                return ra[0 .. node_count][i].value;
+                enforce(i < length);
+                return ra[i].value;
             }
-
+/**
+Sets index i to value, unless another index refuses value
+Preconditions: i < length
+Returns: the resulting _value at index i
+Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
+*/
             const(Value) opIndexAssign(size_t i, const(Value) value){
-                _replace(ra[0 .. node_count][i], value);
-                return ra[0 .. node_count][i].value;
+                enforce(i < length);
+                _Replace(ra[i], value);
+                return ra[i].value;
             }
 
+/**
+Swaps element at index $(D i) with element at index $(D j).
+Preconditions: i < length && j < length
+Complexity: $(BIGOH 1)
+*/
             void swapAt( size_t i, size_t j){
-                auto r = ra[0 .. node_count];
-                swap(r[i], r[j]);
+                enforce(i < length && j < length);
+                swap(ra[i], ra[j]);
             }
 
-            const(Value) removeBack(){
-                const(Value) value = ra[node_count-1].value;
+/**
+Removes the last element from this index.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
+*/
+            void removeBack(){
                 _RemoveAllBut!N(ra[node_count-1]);
                 object.clear(ra[node_count]);
-                return value;
             }
 
             alias removeBack removeAny;
@@ -524,6 +906,7 @@ enum Color : byte
     Black
 }
 
+/// ordered node implementation
 mixin template OrderedNodeMixin(size_t N){
     alias typeof(this)* Node;
     Node _left;
@@ -1042,10 +1425,12 @@ mixin template OrderedNodeMixin(size_t N){
 
 }
 
+/// ordered index implementation
 mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, alias Compare){
     alias ThisNode* Node;
     alias binaryFun!Compare _less;
     alias unaryFun!KeyFromValue key;
+    alias typeof(key(Value.init)) KeyType;
 
     auto _add(Node n)
     {
@@ -1146,7 +1531,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     /**
-     * The range type for $(D RedBlackTree)
+     * The range type for this index, which embodies a bidirectional range
      */
     struct Range
     {
@@ -1213,13 +1598,12 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     // find a node based on an element value
-    private Node _find(Elem e)
+    private Node _find(KeyType k)
     {
         static if(allowDuplicates)
         {
             Node cur = _end.index!N.left;
             Node result = null;
-            auto k = key(e);
             while(cur)
             {
                 auto ck = key(cur.value);
@@ -1239,7 +1623,6 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         else
         {
             Node cur = _end.index!N.left;
-            auto k = key(e);
             while(cur)
             {
                 auto ck = key(cur.value);
@@ -1254,12 +1637,11 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         }
     }
 
-    private void _find2(Elem e, out bool found, out Node par)
+    private void _find2(KeyType k, out bool found, out Node par)
     {
         Node cur = _end.index!N.left;
         par = null;
         found = false;
-        auto k = key(e);
         while(cur)
         {
             auto ck = key(cur.value);
@@ -1278,17 +1660,18 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /**
      * Check if any elements exist in the container.  Returns $(D true) if at least
      * one element exists.
+     * Complexity: $(BIGOH 1)
      */
     @property bool empty()
     {
         return node_count == 0;
     }
 
-    /++
-        Returns the number of elements in the container.
+/++
+Returns the number of elements in the container.
 
-        Complexity: $(BIGOH 1).
-        +/
+Complexity: $(BIGOH 1).
++/
         @property size_t length()
         {
             return node_count;
@@ -1332,13 +1715,24 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         +/
         bool opBinaryRight(string op)(Elem e) if (op == "in")
         {
-            return _find(e) !is null;
+            return _find(key(e)) !is null;
+        }
+    /++
+        $(D in) operator. Check to see if the given element exists in the
+        container.
+
+        Complexity: $(BIGOH log(n))
+        +/
+        bool opBinaryRight(string op,K)(K k) if (op == "in" &&
+                isImplicitlyConvertible!(K, KeyType))
+        {
+            return _find(k) !is null;
         }
 
     /**
      * Removes all elements from the container.
      *
-     * Complexity: $(BIGOH 1)
+     * Complexity: ??
      */
     void clear()
     {
@@ -1350,7 +1744,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      * Insert a single element in the container.  Note that this does not
      * invalidate any ranges currently iterating the container.
      *
-     * Complexity: $(BIGOH log(n))
+     * Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
      */
     size_t stableInsert(Stuff)(Stuff stuff) 
         if (isImplicitlyConvertible!(Stuff, Elem))
@@ -1383,7 +1777,8 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      * Insert a range of elements in the container.  Note that this does not
      * invalidate any ranges currently iterating the container.
      *
-     * Complexity: $(BIGOH m * log(n))
+     * Complexity: $(BIGOH n $(SUB stuff) * i(n)); $(BR) $(BIGOH n $(SUB 
+     stuff) * log(n)) for this index
      */
     size_t stableInsert(Stuff)(Stuff stuff) 
         if(isInputRange!Stuff && 
@@ -1407,7 +1802,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /**
      * Remove an element from the container and return its value.
      *
-     * Complexity: $(BIGOH log(n))
+     * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
     Elem removeAny()
     {
@@ -1422,7 +1817,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /**
      * Remove the front element from the container.
      *
-     * Complexity: $(BIGOH log(n))
+     * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
     void removeFront()
     {
@@ -1435,7 +1830,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /**
      * Remove the back element from the container.
      *
-     * Complexity: $(BIGOH log(n))
+     * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
     void removeBack()
     {
@@ -1451,8 +1846,8 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         Returns: A range containing all of the elements that were after the
         given range.
 
-        Complexity: $(BIGOH m * log(n)) (where m is the number of elements in
-                the range)
+        Complexity:$(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
+                log(n)) for this index
     +/
     Range remove(Range r)
     {
@@ -1474,8 +1869,8 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         Returns: A range containing all of the elements that were after the
         given range.
 
-        Complexity: $(BIGOH m * log(n)) (where m is the number of elements in
-                the range)
+        Complexity: $(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
+                log(n)) for this index 
     +/
     Range remove(Take!Range r)
     {
@@ -1496,33 +1891,35 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     /++
-        Removes elements from the container that are equal to the given values
-        according to the less comparator. One element is removed for each value
-        given which is in the container. If $(D allowDuplicates) is true,
-              duplicates are removed only if duplicate values are given.
+   Removes elements from the container that are equal to the given values
+   according to the less comparator. One element is removed for each value
+   given which is in the container. If $(D allowDuplicates) is true,
+   duplicates are removed only if duplicate values are given.
 
-                  Returns: The number of elements removed.
+   Returns: The number of elements removed.
 
-                  Complexity: $(BIGOH m log(n)) (where m is the number of elements to remove)
+   Complexity: $(BIGOH n $(SUB keys) d(n)); $(BR) $(BIGOH n 
+   $(SUB keys) log(n)) for this index
 
-                  Examples:
-                  --------------------
-                  auto rbt = redBlackTree!true(0, 1, 1, 1, 4, 5, 7);
+   Examples:
+    --------------------
+    // ya, this needs updating
+    auto rbt = redBlackTree!true(0, 1, 1, 1, 4, 5, 7);
     rbt.removeKey(1, 4, 7);
     assert(std.algorithm.equal(rbt[], [0, 1, 1, 5]));
     rbt.removeKey(1, 1, 0);
     assert(std.algorithm.equal(rbt[], [5]));
     --------------------
     +/
-    size_t removeKey(U)(U[] elems...)
-    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
+    size_t removeKey(U)(U[] keys...)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
         size_t count = 0;
 
-        foreach(e; elems)
+        foreach(k; keys)
         {
-            auto beg = _firstGreaterEqual(e);
-            if(beg is _end || _less(e, key(beg.value)))
+            auto beg = _firstGreaterEqual(k);
+            if(beg is _end || _less(k, key(beg.value)))
                 // no values are equal
                 continue;
             _RemoveAll(beg);
@@ -1535,7 +1932,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /++ Ditto +/
     size_t removeKey(Stuff)(Stuff stuff)
     if(isInputRange!Stuff &&
-            isImplicitlyConvertible!(ElementType!Stuff, Elem) &&
+            isImplicitlyConvertible!(ElementType!Stuff, KeyType) &&
             !is(Stuff == Elem[]))
     {
         //We use array in case stuff is a Range from this RedBlackTree - either
@@ -1543,16 +1940,16 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         return removeKey(array(stuff));
     }
 
-    // find the first node where the value is > e
-    private Node _firstGreater(U)(U e)
-    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
+    // find the first node where the value is > k
+    private Node _firstGreater(U)(U k)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
         // can't use _find, because we cannot return null
         auto cur = _end.index!N.left;
         auto result = _end;
         while(cur)
         {
-            if(_less(e, key(cur.value)))
+            if(_less(k, key(cur.value)))
             {
                 result = cur;
                 cur = cur.index!N.left;
@@ -1563,16 +1960,16 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         return result;
     }
 
-    // find the first node where the value is >= e
-    private Node _firstGreaterEqual(U)(U e)
-    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
+    // find the first node where the value is >= k
+    private Node _firstGreaterEqual(U)(U k)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
         // can't use _find, because we cannot return null.
         auto cur = _end.index!N.left;
         auto result = _end;
         while(cur)
         {
-            if(_less(key(cur.value), e))
+            if(_less(key(cur.value), k))
                 cur = cur.index!N.right;
             else
             {
@@ -1585,44 +1982,45 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 
     /**
-     * Get a range from the container with all elements that are > e according
+     * Get a range from the container with all elements that are > k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range upperBound(U)(U e)
-    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
+    Range upperBound(U)(U k)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(_firstGreater(e), _end);
+        return Range(_firstGreater(k), _end);
     }
 
     /**
-     * Get a range from the container with all elements that are < e according
+     * Get a range from the container with all elements that are < k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range lowerBound(U)(U e)
-    if(isImplicitlyConvertible!(U, typeof(key(Elem.init))))
+    Range lowerBound(U)(U k)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(_end.index!N.leftmost, _firstGreaterEqual(e));
+        return Range(_end.index!N.leftmost, _firstGreaterEqual(k));
     }
 
     /**
-     * Get a range from the container with all elements that are == e according
+     * Get a range from the container with all elements that are == k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range equalRange(Elem e)
+    Range equalRange(U)(U k)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
-        auto beg = _firstGreaterEqual(key(e));
-        if(beg is _end || _less(key(e), key(beg.value)))
+        auto beg = _firstGreaterEqual(k);
+        if(beg is _end || _less(k, key(beg.value)))
             // no values are equal
             return Range(beg, beg);
         static if(allowDuplicates)
         {
-            return Range(beg, _firstGreater(key(e)));
+            return Range(beg, _firstGreater(k));
         }
         else
         {
@@ -1632,9 +2030,13 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         }
     }
 
-    Range bounds(string boundaries = "[]", U,V)(U lower, V upper)
-        if(isImplicitlyConvertible!(U, typeof(key(Elem.init))) &&
-           isImplicitlyConvertible!(V, typeof(key(Elem.init))))
+/++
+Get a range of values bounded below by lower and above by upper, with
+inclusiveness defined by boundaries.
+Complexity: $(BIGOH log(n))
++/
+    Range bounds(string boundaries = "[]", U)(U lower, U upper)
+    if(isImplicitlyConvertible!(U, KeyType))
     {
         static if(boundaries == "[]"){
             return Range(_firstGreaterEqual(lower), _firstGreater(upper));
@@ -1731,9 +2133,11 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     }
 }
 
-template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
+/// A red black tree index
+template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
+        alias Compare = "a<b"){
     template Inner(ThisNode, Value, size_t N){
-        alias TypeTuple!(N, false, KeyFromValue, Compare) IndexTuple;
+        alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare) IndexTuple;
         alias OrderedIndex IndexMixin;
 
         enum IndexCtorMixin = "_end = alloc();";
@@ -1745,20 +2149,18 @@ template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
 
 /// A red black tree index
 template OrderedNonUnique(alias KeyFromValue="a", alias Compare = "a<b"){
-    template Inner(ThisNode, Value, size_t N){
-        alias TypeTuple!(N, true, KeyFromValue, Compare) IndexTuple;
-        alias OrderedIndex IndexMixin;
-
-        enum IndexCtorMixin = "_end = alloc();";
-        /// node implementation (ish)
-        alias TypeTuple!(N) NodeTuple;
-        alias OrderedNodeMixin NodeMixin;
-    }
+    alias Ordered!(true, KeyFromValue, Compare) OrderedNonUnique;
+}
+/// A red black tree index
+template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
+    alias Ordered!(false, KeyFromValue, Compare) OrderedUnique;
 }
 
 // end RBTree impl
 
+/// a max heap index
 template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
+    /// _
     template Inner(ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,KeyFromValue, Compare) IndexTuple;
@@ -1767,6 +2169,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
             size_t _index;
         }
 
+        /// index implementation
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Compare){
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
@@ -1823,8 +2226,10 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 }
             }
 
-            /// Ends up performing a breadwise traversal (I think..)
-            /// Expose a bidirectional range interface.
+            /// The primary range of the index, which embodies a bidirectional
+            /// range.
+            ///
+            /// Ends up performing a breadth first traversal (I think..)
             struct Range{
                 ThisNode*[] _rng;
 
@@ -1842,38 +2247,81 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 Range save(){ return this; }
             }
 
+/**
+Fetch a range that spans all the elements in the container.
+
+Complexity: $(BIGOH 1)
+*/
             Range opSlice(){
                 return Range(_heap[0 .. node_count]);
             }
 
+/**
+Returns the number of elements in the container.
+
+Complexity: $(BIGOH 1).
+*/
             @property size_t length(){
                 return node_count;
             }
 
+/**
+Property returning $(D true) if and only if the container has no
+elements.
+
+Complexity: $(BIGOH 1)
+*/
             @property bool empty(){
                 return node_count == 0;
             }
 
+/**
+Returns: the max element in this index
+Complexity: $(BIGOH 1)
+*/ 
             const(Value) front(){
                 return _heap[0].value;
             }
+/**
+Returns: the back of this index
+Complexity: $(BIGOH 1)
+*/ 
             const(Value) back(){
                 return _heap[node_count-1].value;
             }
+/**
+  ??
+*/
             void clear(){
                 assert(0);
             }
 
-            size_t capacity(){
+/**
+Returns the _capacity of the index, which is the length of the
+underlying store 
+*/
+            @property size_t capacity(){
                 return _heap.length;
             }
 
+/**
+Ensures sufficient capacity to accommodate $(D n) elements.
+
+Postcondition: $(D capacity >= n)
+
+Complexity: $(BIGOH ??) if $(D e > capacity),
+otherwise $(BIGOH 1).
+*/
             void reserve(size_t count){
                 if(_heap.length < count){
                     _heap.length = count;
                 }
             }
-
+/**
+Inserts value into this heap, unless another index refuses it.
+Returns: the number of values added to the container
+Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
+*/
             size_t insert(SomeValue)(SomeValue value)
             if(isImplicitlyConvertible!(SomeValue, const(Value)))
             {
@@ -1896,6 +2344,10 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
 
             // todo stableInsert
 
+/**
+Removes the max element of this index from the container.
+Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
+*/
             void removeFront(){
                 _RemoveAll(_heap[0]);
             }
@@ -1906,12 +2358,18 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 sift(node.index!N._index);
             }
             // todo stableRemoveFront
+/**
+Forwards to removeFront
+*/
             alias removeFront removeAny;
             // todo stableRemoveAny
 
 
-            /// why would you do this? no idea
-            /// time O(1) + O(r(N))
+/**
+* removes the back of this index from the container. Why would you do this? 
+No idea.
+Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
+*/
             void removeBack(){
                 _RemoveAllBut!N(_heap[node_count-1]);
             }
@@ -1921,7 +2379,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
 }
 
 /// a hash table index
-template HashedUnique(alias KeyFromValue="a", alias hash = "??", alias Eq = "a==b"){
+template HashedUnique(alias KeyFromValue="a", alias Hash = "??", alias Eq = "a==b"){
     template Inner(ThisNode, Value, size_t N){
         template Index(){
             alias HashedIndex!(ThisNode, Value, N, 
@@ -1936,16 +2394,19 @@ template HashedUnique(alias KeyFromValue="a", alias hash = "??", alias Eq = "a==
 }
 
 /// a hash table index
-template HashedNonUnique(alias KeyFromValue="a", alias hash = "??", alias Eq = "a==b"){
+template Hashed(bool allowDuplicates = false, alias KeyFromValue="a", 
+        alias Hash = "??", alias Eq = "a==b"){
     template Inner(ThisNode, Value, size_t N){
-        template Index(){
-            alias HashedIndex!(ThisNode, Value, N, 
-                    KeyFromValue, hash, Eq, false) Index;
-        }
-        /// node implementation (ish)
-
+        alias TypeTuple!() NodeTuple;
+        alias TypeTuple!(N,KeyFromValue, Compare) IndexTuple;
+        // node implementation 
         // all the overhead is in the index
         mixin template NodeMixin(size_t N){
+        }
+
+        mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
+                alias Eq, bool unique){
+            ThisNode*[] hashes;
         }
     }
 }
@@ -1955,23 +2416,25 @@ struct IndexedBy(L...)
     alias L List;
 }
 
-/// A multi_index node. Holds the value of a single element,
-/// plus per-node headers of each index, if any. (random_access
-/// and hashed don't have per-node headers)
-/// The headers are all mixed in in the same scope. To prevent
-/// naming conflicts, a header field must be accessed with the number
-/// of its index. Example:
-/// ----
-/// alias MNode!(IndexedBy!(Sequenced!(), Sequenced!(), 
-///     OrderedUnique!()), int) Node;
-/// Node* n1 = new Node();
-/// Node* n2 = new Node();
-/// n1.index!(0).next = n2;
-/// n2.index!(0).prev = n1;
-/// n1.index!(1).prev = n2;
-/// n2.index!(1).next = n1;
-/// n1.index!(2).left = n2;
-/// ----
+/++
+A multi_index node. Holds the value of a single element,
+plus per-node headers of each index, if any. (random_access
+and hashed don't have per-node headers)
+The headers are all mixed in in the same scope. To prevent
+naming conflicts, a header field must be accessed with the number
+of its index. 
+Example:
+----
+alias MNode!(IndexedBy!(Sequenced!(), Sequenced!(), OrderedUnique!()), int) Node;
+Node* n1 = new Node();
+Node* n2 = new Node();
+n1.index!0 .next = n2;
+n2.index!0 .prev = n1;
+n1.index!1 .prev = n2;
+n2.index!1 .next = n1;
+n1.index!2 .left = n2;
+----
++/
 struct MNode(IndexedBy, Value){
     Value value;
 
@@ -1998,13 +2461,11 @@ struct MNode(IndexedBy, Value){
 
 
 
-template HashedIndex(ThisNode,Value, size_t N, alias KeyFromValue, alias Hash, alias Eq, bool unique){
-    mixin template Index(size_t N){
-        Array!(ThisNode*) hashes;
-    }
-}
 
-class MultiIndexContainer(IndexedBy, Value){
+/++ 
+The container
++/
+class MultiIndexContainer(Value, IndexedBy){
     alias MNode!(IndexedBy,Value) ThisNode;
 
     size_t node_count;
@@ -2022,18 +2483,12 @@ class MultiIndexContainer(IndexedBy, Value){
         mixin(ForEachCtorMixin!(0).result);
     }
 
-    @property size_t length(){
-        return node_count;
-    }
-
-    @property bool empty(){
-        return node_count == 0;
-    }
-
-    void _replace(ThisNode* node, const(Value) value){
+    void _Replace(ThisNode* node, const(Value) value){
         assert(false);
     }
 
+    /// specify how to allocate a node
+    /// todo: specify how to deallocate a node?
     ThisNode* alloc(){
         return new ThisNode;
     }
@@ -2095,9 +2550,9 @@ denied:
         node_count --;
     }
 
-    /// disattach node from all indeces.
-    // @@@BUG@@@ cannot pass length directly to _RemoveAllBut
     enum _grr_bugs = IndexedBy.List.length;
+    /// disattach node from all indeces.
+    /// @@@BUG@@@ cannot pass length directly to _RemoveAllBut
     alias _RemoveAllBut!(_grr_bugs) _RemoveAll;
 
     template ForEachAlias(size_t N,size_t index, alias X){
@@ -2130,17 +2585,8 @@ denied:
     mixin(stuff);
 }
 
-import std.array;
-import std.stdio;
+import std.stdio: writeln, writefln;
 import std.string: format;
-
-struct S{
-    int i;
-    int j;
-    string toString()const{
-        return format("(%s %s)", i,j);
-    }
-}
 
 int[] arr(Range)(Range r){
     int[] result = new int[](r.length);
@@ -2151,7 +2597,6 @@ int[] arr(Range)(Range r){
     return result;
 }
 void main(){
-    /+
     alias MNode!(IndexedBy!(
                 Sequenced!(), 
                 OrderedUnique!(),
@@ -2159,11 +2604,11 @@ void main(){
     Node* n1 = new Node();
     Node* n2 = new Node();
     enum R = 1;
-    n1.index!(0).next = n2;
-    n1.index!(1).left = n2;
-    +/
-    alias MultiIndexContainer!(IndexedBy!(Sequenced!(), 
-                OrderedNonUnique!("a"), RandomAccess!(), Heap!()),int) C;
+    n1.index!0 .next = n2;
+    n1.index!1 .left = n2;
+    alias MultiIndexContainer!(int, 
+            IndexedBy!(Sequenced!(), OrderedNonUnique!(), 
+                RandomAccess!(), Heap!())) C;
 
     C i = new C;
     /+
