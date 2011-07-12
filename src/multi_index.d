@@ -48,7 +48,7 @@ $(TEXTWITHCOMMAS Usage:)
 -----
 alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), ...)) C;
 C c = new C;
-c.index!0 .insert(0); // access the index directly
+c.index!0 .insert(0); // access the index directly (operator overloads won't work here)
 c.index!0 .insert(1);
 auto i0 = c.get_index!0; // or via a helper class (recommended)
 assert(array(i0[]) == [0,1]); // assumes no index refused these elements
@@ -57,7 +57,7 @@ assert(array(i0[]) == [3,4,5,0,1]); // ditto
 i0.removeAny();
 assert(array(i0[]) == [3,4,5,0]);
 i0.removeFront();
-assert(array(i0[]) == [3,4,5,0]);
+assert(array(i0[]) == [4,5,0]);
 -----
 $(TEXTWITHCOMMAS Complexities:)
 $(BOOKTABLE, $(TR $(TH) $(TH))
@@ -243,7 +243,6 @@ module multi_index;
  *  allocation?
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
- *  expose indeces as standalone structs
  *  replace functionality
  *  clear functionality
  *  op ~ 
@@ -482,7 +481,7 @@ this index
                     foreach(item; stuff){
                         ThisNode* node = _InsertAllBut!N(item);
                         if (!node) continue;
-                        SequencedIndex._insertNext(node, prev);
+                        _insertNext(node, prev);
                         prev = node;
                         count ++;
                     }
@@ -595,22 +594,6 @@ Complexity: $(BIGOH d(n)); $(BIGOH 1) for this index
             void removeFront(){
                 _RemoveAll(_front);
             }
-
-            ThisNode* _removeBack()
-                in{
-                    assert(_back !is null);
-                    assert(_front !is null);
-                }body{
-                    ThisNode* n = _back;
-                    if(_back == _front){
-                        _back = _front = null;
-                    }else{
-                        _back = _back.index!N.prev;
-                        n.index!N.prev = null;
-                        _back.index!N.next = null;
-                    }
-                    return n;
-                }
 
 /++
 Removes the value at the back of the index from the container. 
@@ -2374,6 +2357,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 _RemoveAllBut!N(_heap[node_count-1]);
             }
             /// todo stableRemoveBack
+
         }
     }
 }
@@ -2574,6 +2558,14 @@ denied:
                     alias L$N.Inner!(ThisNode,Value,$N) M$N;
                     mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
+                    class Index$N{
+                        auto opDispatch(string s, T...)(T args){
+                            mixin("return this.outer.index!($N)."~s~"(args);");
+                        }
+                    }
+                    Index$N get_index(size_t n)() if(n == $N){
+                        return this.new Index$N();
+                    }
                 },  "$N", Format!("%s",N)) ~ 
                 ForEachIndex!(N+1, L[1 .. $]).result;
         }else{
@@ -2624,7 +2616,9 @@ void main(){
     writeln(array(i.index!(0).opSlice()));
     writeln(array(i.index!(1).opSlice()));
     +/
-    i.index!(0).insert(2);
+    auto c = i.get_index!0;
+    struct J{}
+    c.insert("a");
     i.index!(0).insert(5);
     i.index!(0).insert(5);
     i.index!(0).insert(4);
