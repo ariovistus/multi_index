@@ -1737,26 +1737,6 @@ $(BIGOH log(n))
             enforce(n);
             return n.value;
         }
-/**
-Available for Unique variant.
-Complexity:
-$(BIGOH r(n)), if value associated with k already exists in container, $(BR)
-$(BIGOH i(n)) otherwise. $(BR)
-$(BIGOH log(n)) for this index, either way.
-*/
-        const(Value) opIndexAssign(const(Value) value, KeyType k){
-            Node n = _find(k);
-            if(n){
-                _Replace(n, value);
-                // todo: what if _replace doesn't work?
-                return value;
-            }else{
-                n = _InsertAll(value);
-                enforce(n);
-                return value;
-            }
-
-        }
     }
 
     /**
@@ -1768,7 +1748,6 @@ $(BIGOH log(n)) for this index, either way.
     size_t stableInsert(Stuff)(Stuff stuff) 
         if (isImplicitlyConvertible!(Stuff, Elem))
         {
-            writeln(stuff);
             static if(!allowDuplicates){
                 bool found;
                 Node p;
@@ -2476,7 +2455,10 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
         // could be singly linked, but that would make aux removal more 
         // difficult
         alias Sequenced!().Inner!(ThisNode, Value, N).NodeMixin NodeMixin;
-        enum IndexCtorMixin = "hashes.length = primes[0];";
+        enum IndexCtorMixin = q{
+            hashes.length = primes[0];
+            load_factor = 0.80;
+        };
 
         /// index implementation
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
@@ -2487,6 +2469,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
             alias binaryFun!Eq eq;
 
             ThisNode*[] hashes;
+            double load_factor;
 
             /// the primary range for this index, which embodies a forward 
             /// range. iteration has time complexity O(n) 
@@ -2604,29 +2587,6 @@ $(BIGOH n) ($(BIGOH 1) on a good day)
                     enforce(_find(k, node, index));
                     return node.value;
                 }
-
-/**
-Available for Unique variant.
-Complexity:
-$(BIGOH r(n)), if value associated with k exists in container,$(BR)
-$(BIGOH i(n)), otherwise. $(BR)
-$(BIGOH n) for this index either way ($(BIGOH 1) on a good day)
-*/
-                void opIndexAssign ( const(Value) value, KeyType k ){ 
-                    ThisNode* node;
-                    size_t index;
-                    if(_find(k, node, index)){
-                        _Replace(n, value);
-                    }else{
-                        ThisNode* newnode = _InsertAllBut!N(value);
-                        enforce(newnode);
-                        if(node is null){
-                            hashes[index] = newnode;
-                        }else{
-                            node.insertNext(newnode);
-                        }
-                    }
-                }
             }
 
 /**
@@ -2718,6 +2678,47 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     }
                 }
             }
+
+            size_t maxLoad(size_t n){
+                double load = n * load_factor;
+                if(load > size_t.max) return size_t.max;
+                return cast(size_t) load;
+            }
+
+            void reserve(size_t n){
+                if (n <= maxLoad(hashes.length)) return;
+                size_t i = 0;
+                while(i < primes.length && maxLoad(primes[i]) < n){
+                    i++;
+                }
+                if (hashes.length == primes[i] && i == primes.length-1){
+                    // tough
+                    return;
+                }else if (hashes.length >= primes[i]){
+                    // hmm.
+                    return;
+                }
+
+                auto r = opSlice();
+                hashes = new ThisNode*[](primes[i]);
+                while(!r.empty){
+                    ThisNode* node = r.node;
+                    ThisNode* cursor;
+                    size_t index;
+                    r.popFront();
+                    if(_find(key(node.value), cursor, index)){
+                        if(!cursor.index!N.prev){
+                            hashes[index] = node;
+                        }
+                        cursor.index!N.insertPrev(node);
+                    }else if (cursor){
+                        cursor.index!N.insertNext(node);
+                    }else{
+                        hashes[index] = node;
+                        node.index!N.prev = node.index!N.next = null;
+                    }
+                }
+            }
 /**
 insert value into this container. For Unique variant, will refuse value
 if value already exists in index.
@@ -2727,7 +2728,7 @@ Complexity:
 $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
 */
             size_t insert(SomeValue)(SomeValue value)
-            if(isImplicitlyConvertible!(SomeValue, Const(Value))){
+            if(isImplicitlyConvertible!(SomeValue, const(Value))){
                 ThisNode* node;
                 size_t index;
                 static if(!allowDuplicates){
@@ -2745,6 +2746,9 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                     auto k = key(value);
                     bool found = _find(k, node, index);
                     if(found) return 0;
+                }
+                if(maxLoad(hashes.length) < node_count+1){
+                    reserve(max(maxLoad(2* hashes.length + 1), node_count+1));
                 }
                 if(found){
                     // meh, lets not walk to the end of equal range
@@ -2770,10 +2774,20 @@ $(BIGOH i(n)) $(BR) $(BIGOH n+n $(SUB r)) for this index
 ($(BIGOH n $(SUB r)) on a good day)
 */
             size_t insert(SomeRange)(SomeRange r)
-            if(isImplicitlyConvertible!(ElementType!SomeRange, Const(Value))){
+            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value))){
                 size_t count = 0;
+                static if(hasLength!SomeRange){
+                    if(maxLoad(node_count) < node_count+r.length){
+                        reserve(max(2 * node_count + 1, node_count+r.length));
+                    }
+                }
                 foreach(e; r){
                     count += insert(e);
+                    static if(hasLength!SomeRange){
+                        if(maxLoad(node_count) < node_count+1){
+                            reserve(max(2* node_count + 1, node_count+1));
+                        }
+                    }
                 }
                 return count;
             }
@@ -2970,7 +2984,7 @@ class MultiIndexContainer(Value, IndexedBy){
         }else enum result = "";
     }
 
-    ThisNode* _InsertAllBut(size_t N)(const(Value) value){
+    ThisNode* _InsertAllBut(size_t N)(Value value){
         ThisNode* node = alloc();
         node.value = value;
         mixin(ForEachCheckInsert!(0, N).result);
@@ -3025,6 +3039,20 @@ denied:
                     mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                     class Index$N{
+
+                        // grr opdispatch not handle this one
+                        auto opSlice(){
+                            return this.outer.index!($N).opSlice;
+                        }
+                        /+
+                        // grr opdispatch not handle this one
+                        static if(is(typeof(this.outer.index!($N).opIn(Value.init)))){
+                            auto opIn(const(Value) v){
+                                return this.outer.index!($N).opIn(v);
+                            }
+                        }
+                        +/
+
                         auto opDispatch(string s, T...)(T args){
                             mixin("return this.outer.index!($N)."~s~"(args);");
                         }
@@ -3054,6 +3082,7 @@ int[] arr(Range)(Range r){
     }
     return result;
 }
+version(TestMultiIndex)
 void main(){
     alias MNode!(IndexedBy!(
                 Sequenced!(), 
@@ -3065,8 +3094,11 @@ void main(){
     n1.index!0 .next = n2;
     n1.index!1 .left = n2;
     alias MultiIndexContainer!(int, 
+            IndexedBy!(Sequenced!())) C;
+            /+
             IndexedBy!(Sequenced!(), OrderedNonUnique!(), 
                 RandomAccess!(), Heap!(), HashedNonUnique!())) C;
+    +/
 
     C i = new C;
     /+
@@ -3084,7 +3116,8 @@ void main(){
     +/
     auto c = i.get_index!0;
     struct J{}
-    c.insert("a");
+    //c.insert("a");
+    i.insert(5);
     i.index!(0).insert(5);
     i.index!(0).insert(5);
     i.index!(0).insert(4);
