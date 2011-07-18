@@ -51,16 +51,25 @@ void main(){
 
     auto ihash = heap.get_index!0;
     auto iheap = heap.get_index!1;
-    auto rng = iheap[];
-    while(!rng.empty){
-        auto node = rng.front;
-        // grr
-        if ((node.name) !in ihash){
-            auto rng2 = takeOne(rng); 
-            rng.popFront();
-            iheap.remove(rng2);
-        }else{
-            rng.popFront();
+    foreach(node; iheap[]){
+        auto rng = (cast(Node*)node).children.opSlice();
+        while(!rng.empty){
+            auto modl = rng.front();
+            if (!ihash.contains(modl) || modl == node.name){
+                rng.removeFront();
+            }else{
+                (cast(Node*)ihash.opIndex(modl)).parents.insert(node.name);
+                rng.popFront();
+            }
+        }
+    }
+    foreach(node; iheap[]){
+        writefln("module: %s", node.name);
+        foreach(modl; (cast(Node*)node).children[]){
+            writefln(" imports %s", modl);
+        }
+        foreach(modl; (cast(Node*)node).parents[]){
+            writefln(" imported %s", modl);
         }
     }
 }

@@ -259,14 +259,16 @@ import std.functional: unaryFun, binaryFun;
 template Sequenced(){
     // damn you, ddoc
     /// _
-    template Inner(ThisNode, Value, size_t N){
+    template Inner(ThisContainer,ThisNode, Value, size_t N){
 
 /**
 Defines the index' primary range, which embodies a
 bidirectional range 
 */
         struct Range{
+            ThisContainer c;
             ThisNode* _front, _back;
+            alias _front node;
 
             @property bool empty() {
                 return 
@@ -289,6 +291,30 @@ bidirectional range
 
             void popBack(){
                 _back = _back.index!N.prev;
+            }
+
+/**
+Pops front and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
+*/
+            void removeFront(){
+                ThisNode* node = _front;
+                popFront();
+                c._RemoveAll(node);
+            }
+
+/**
+Pops back and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
+*/
+            void removeBack(){
+                ThisNode* node = _back;
+                popBack();
+                c._RemoveAll(node);
             }
         }
 
@@ -378,7 +404,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             Range opSlice(){
-                return Range(_front, _back);
+                return Range(this, _front, _back);
             }
 
 /**
@@ -641,7 +667,7 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 /// A random access index.
 template RandomAccess(){
     /// _
-    template Inner(ThisNode, Value, size_t N){
+    template Inner(ThisContainer,ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N) IndexTuple;
 
@@ -664,21 +690,51 @@ template RandomAccess(){
             /// Defines the index' primary range, which embodies a
             /// random access range 
             struct Range{
-                // storing a slice is probably really dumb, since
-                // it requires pointer comparison to figure out where
-                // in the original array the slice is.
-                ThisNode*[] ra;
+                ThisContainer c;
+                size_t s, e;
 
-                const(Value) front(){ return ra[0].value; }
+                const(Value) front(){ 
+                    assert(s < e && e <= c.length);
+                    return c.ra[s].value; 
+                }
 
-                void popFront(){ ra.popFront(); }
+                void popFront(){ s++; }
 
-                @property bool empty(){ return ra.empty; }
-                @property size_t length(){ return ra.length; }
+/**
+Pops front and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
+*/
+                void removeFront(){
+                    ThisNode* node = c.ra[s];
+                    c._RemoveAll(node);
+                    // c will shift everything down
+                    e--;
+                }
 
-                const(Value) back(){ return ra.back().value; }
+                @property bool empty(){ return s >= e; }
+                @property size_t length(){ return s <= e ? e-s : 0; }
 
-                void popBack(){ ra.popBack(); }
+                const(Value) back(){ 
+                    assert(s < e && e <= c.length);
+                    return c.ra[e-1].value;
+                }
+
+                void popBack(){ e--; }
+
+/**
+Pops front and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
+*/
+                void removeBack(){ 
+                    ThisNode* node = c.ra[e-1];
+                    c._RemoveAll(node);
+                    // c will shift everything down
+                    e--;
+                }
 
                 Range save(){ return this; }
 
@@ -691,7 +747,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             Range opSlice (){
-                return Range(ra[0 .. node_count]);
+                return Range(this, 0, node_count);
             }
 
 /**
@@ -703,7 +759,7 @@ Complexity: $(BIGOH 1)
 */
             Range opSlice(size_t a, size_t b){
                 enforce(a <= b && b <= length);
-                return Range(ra[a .. b]);
+                return Range(this, a, b);
             }
 
 /**
@@ -1412,7 +1468,7 @@ mixin template OrderedNodeMixin(size_t N){
 }
 
 /// ordered index implementation
-mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, alias Compare){
+mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, alias Compare, ThisContainer){
     alias ThisNode* Node;
     alias binaryFun!Compare _less;
     alias unaryFun!KeyFromValue key;
@@ -1521,14 +1577,9 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      */
     struct Range
     {
+        ThisContainer c;   
         private Node _begin;
         private Node _end;
-
-        private this(Node b, Node e)
-        {
-            _begin = b;
-            _end = e;
-        }
 
         /**
          * Returns $(D true) if the range is _empty
@@ -1572,6 +1623,29 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         void popBack()
         {
             _end = _end.index!N.prev;
+        }
+/**
+Pops front and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
+*/
+        void removeFront(){
+            Node node = _begin;
+            popFront();
+            c._RemoveAll(node);
+        }
+/**
+Pops back and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
+*/
+        void removeBack(){
+            Node node = _end.index!N.prev;
+            popBack();
+            c._RemoveAllBut!N(node);
+            _end = c._Remove(node);
         }
 
         /**
@@ -1670,7 +1744,7 @@ Complexity: $(BIGOH 1).
      */
     Range opSlice()
     {
-        return Range(_end.index!N.leftmost, _end);
+        return Range(this,_end.index!N.leftmost, _end);
     }
 
     /**
@@ -1793,8 +1867,8 @@ $(BIGOH log(n))
     /// ditto
     alias stableInsert insert;
 
-    void _Remove(Node n){
-        n.index!N.remove(_end);
+    Node _Remove(Node n){
+        return n.index!N.remove(_end);
     }
 
     /**
@@ -1860,7 +1934,7 @@ $(BIGOH log(n))
         }
         version(RBDoChecks)
             check();
-        return Range(e, _end);
+        return Range(this, e, _end);
     }
 
     /++
@@ -1889,7 +1963,7 @@ $(BIGOH log(n))
             dealloc(ob);
         }
 
-        return Range(e, _end);
+        return Range(this, e, _end);
     }
 
     /++
@@ -2138,8 +2212,8 @@ Complexity: $(BIGOH log(n))
 /// A red black tree index
 template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Compare = "a<b"){
-    template Inner(ThisNode, Value, size_t N){
-        alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare) IndexTuple;
+    template Inner(ThisContainer, ThisNode, Value, size_t N){
+        alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
 
         enum IndexCtorMixin = "_end = alloc();";
@@ -2163,16 +2237,17 @@ template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
 /// a max heap index
 template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
     /// _
-    template Inner(ThisNode, Value, size_t N){
+    template Inner(ThisContainer, ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
-        alias TypeTuple!(N,KeyFromValue, Compare) IndexTuple;
+        alias TypeTuple!(N,KeyFromValue, Compare, ThisContainer) IndexTuple;
 
         mixin template NodeMixin(){
             size_t _index;
         }
 
         /// index implementation
-        mixin template IndexMixin(size_t N, alias KeyFromValue, alias Compare){
+        mixin template IndexMixin(size_t N, alias KeyFromValue, alias Compare, 
+                ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
 
@@ -2215,6 +2290,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     while(l(n) < node_count && less(k,chk)){
                         swapAt(n, ch);
                         n = ch;
+                        if(l(n) >= node_count) break;
                         ch = l(n);
                         chk = key(_heap[ch].value);
                         if (r(n) < node_count){
@@ -2229,22 +2305,38 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
             }
 
             /// The primary range of the index, which embodies a bidirectional
-            /// range.
+            /// range. 
             ///
             /// Ends up performing a breadth first traversal (I think..)
+            ///
+            /// removeFront and removeBack are not possible.
             struct Range{
-                ThisNode*[] _rng;
+                ThisContainer c;
+                size_t s,e;
 
-                const(Value) front(){ return _rng[0].value; }
+                const(Value) front(){ 
+                    return c.index!N._heap[s].value; 
+                }
 
-                void popFront(){ _rng.popFront(); }
+                void popFront(){ 
+                    s++;
+                }
 
-                @property bool empty(){ return _rng.empty; }
-                @property size_t length(){ return _rng.length; }
+                const(Value) back(){
+                    return c.index!N._heap[e-1].value; 
+                }
+                void popBack(){ 
+                    e--;
+                }
 
-                const(Value) back(){ return _rng.back().value; }
-
-                void popBack(){ _rng.popBack(); }
+                @property bool empty(){ 
+                    assert(e <= c.index!N.length);
+                    return s >= c.index!N.length; 
+                }
+                @property size_t length(){ 
+                    assert(e <= c.index!N.length);
+                    return s <= e ? e - s : 0;
+                }
 
                 Range save(){ return this; }
             }
@@ -2255,7 +2347,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             Range opSlice(){
-                return Range(_heap[0 .. node_count]);
+                return Range(this,0, node_count);
             }
 
 /**
@@ -2355,9 +2447,16 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
             }
 
             void _Remove(ThisNode* node){
-                swapAt(node.index!N._index, node_count-1);
-                _heap[node_count-1] = null;
-                sift(node.index!N._index);
+                if(node.index!N._index == node_count-1){
+                    _heap[node_count-1] = null;
+                }else{
+                    size_t ix = node.index!N._index;
+                    swapAt(ix, node_count-1);
+                    _heap[node_count-1] = null;
+                    node_count--;
+                    sift(ix);
+                    node_count++;
+                }
             }
             // todo stableRemoveFront
 /**
@@ -2386,8 +2485,10 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                     }else{
                         ThisNode* node = r.source._rng[0];
                     }
+                    writefln(" remove! %s %s", node,node_count);
                     r.popFront();
                     _RemoveAll(node);
+                    writefln(" post remove! %s", node_count);
                 }
                 return Range(_heap[0 .. 0]);
             }
@@ -2435,7 +2536,7 @@ static if(size_t.sizeof == 4){
 template Hashed(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){
     /// _
-    template Inner(ThisNode, Value, size_t N){
+    template Inner(ThisContainer, ThisNode, Value, size_t N){
         alias unaryFun!KeyFromValue key;
         alias typeof(key(Value.init)) KeyType;
         static if (Hash == "??"){
@@ -2450,11 +2551,12 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         alias TypeTuple!(N) NodeTuple;
         alias TypeTuple!(N,KeyFromValue, _Hash, Eq, allowDuplicates, 
-                Sequenced!().Inner!(ThisNode,Value,N).Range) IndexTuple;
+                Sequenced!().Inner!(ThisContainer, ThisNode,Value,N).Range, 
+                ThisContainer) IndexTuple;
         // node implementation 
         // could be singly linked, but that would make aux removal more 
         // difficult
-        alias Sequenced!().Inner!(ThisNode, Value, N).NodeMixin NodeMixin;
+        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, N).NodeMixin NodeMixin;
         enum IndexCtorMixin = q{
             hashes.length = primes[0];
             load_factor = 0.80;
@@ -2462,36 +2564,25 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         /// index implementation
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
-                alias Eq, bool allowDuplicates, ListRange){
+                alias Eq, bool allowDuplicates, ListRange, ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias typeof(key((const(Value)).init)) KeyType;
             alias unaryFun!Hash hash;
             alias binaryFun!Eq eq;
 
             ThisNode*[] hashes;
+            ThisNode* _first;
             double load_factor;
 
             /// the primary range for this index, which embodies a forward 
             /// range. iteration has time complexity O(n) 
             struct Range{
-                ThisNode*[] hashes;
+                ThisContainer c;
                 ThisNode* node;
                 size_t n;
 
-                this(ThisNode*[] _hashes){
-                    hashes = _hashes;
-                    n = 0;
-                    while(n < hashes.length && !hashes[n]){
-                        n++;
-                    }
-
-                    if(n < hashes.length){
-                        node = hashes[n];
-                    }
-                }
-
                 @property bool empty(){
-                    return n == hashes.length;
+                    return n >= c.hashes.length;
                 }
 
                 const(Value) front(){
@@ -2502,11 +2593,17 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                     node = node.index!N.next;
                     if(!node){
                         do n++;
-                        while(n < hashes.length && !hashes[n]);
-                        if( n < hashes.length ){
-                            node = hashes[n];
+                        while(n < c.hashes.length && !c.hashes[n]);
+                        if( n < c.hashes.length ){
+                            node = c.hashes[n];
                         }
                     }
+                }
+
+                void removeFront(){
+                    ThisNode* n = node;
+                    popFront();
+                    c._RemoveAll(n);
                 }
 
                 Range save(){
@@ -2534,22 +2631,24 @@ Complexity: $(BIGOH 1)
             }
 
 /**
-Forward to opSlice().front
 Preconditions: !empty
-Complexity: $(BIGOH n) 
+Complexity: $(BIGOH 1) 
 */ 
             const(Value) front(){
-                return opSlice().front();
+                return _first.value;
             }
     
             void clear(){
                 assert(0);
             }
 
+/**
+Gets a range of all elements in container.
+Complexity: $(BIGOH 1)
+*/
             Range opSlice(){
-                // hope this doesn't get me in trouble
-                if(empty) return Range(hashes[0 .. 0]);
-                return Range(hashes);
+                if(empty) return Range(this, null, hashes.length);
+                return Range(this, _first, hash(key(_first.value)));
             }
 
             // returns true iff k was found.
@@ -2614,6 +2713,63 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
             }
 
 /**
+Reports whether value exists in this collection
+Complexity:
+$(BIGOH n) ($(BIGOH n 1) on a good day)
+ */
+            bool contains(Value value){
+                ThisNode* node;
+                size_t index;
+                return _find(key(value), node,index);
+            }
+
+            bool contains(KeyType k){
+                ThisNode* node;
+                size_t index;
+                return _find(k, node,index);
+            }
+
+/**
+Perform mod on r.front and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, r.front is
+removed from the container.
+Preconditions: !r.empty, $(BR)
+mod is a callable either of the form void mod(ref Value) or Value mod(Value)
+Complexity: $(BIGOH m(n)), $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
+*/
+
+            void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
+            if(is(SomeRange == Range) || is(SomeRange == ListRange)) {
+                ThisNode* node = r.node;
+                _Modify(node, mod);
+            }
+
+            KeyType _NodePosition(ThisNode* node){
+                return key(node.value);
+            }
+
+            bool _FixPosition(ThisNode* node, KeyType oldPosition){
+                auto newPosition = key(node.value);
+                if(eq(newPosition, oldPosition)) return true;
+                static if(allowDuplicates){
+                    _Remove(node);
+                    _Insert(node);
+                    return true;
+                }else{
+                    ThisNode* n;
+                    size_t index;
+                    if(_find(newPosition, n, index)){
+                        return false;
+                    }else{
+                        _Remove(node);
+                        _Insert(node, n);
+                        return true;
+                    }
+                }
+            }
+
+
+/**
 Returns a range of all elements with eq(key(elem), k). 
 Complexity:
 $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
@@ -2625,14 +2781,14 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     return ListRange(null,null);
                 }
                 static if(!allowDuplicates){
-                    return ListRange(node, node.index!N.next);
+                    return ListRange(this,node, node.index!N.next);
                 }else{
                     ThisNode* node2 = node;
                     while(node2.index!N.next !is null && 
                             eq(k, key(node2.index!N.next.value))){
                         node2 = node2.index!N.next;
                     }
-                    return ListRange(node, node2);
+                    return ListRange(this, node, node2);
                 }
             }
 
@@ -2645,10 +2801,18 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                             hashes[index] = n;
                         }
                         cursor.index!N.insertPrev(n);
+                        size_t findex = hash(key(_first.value))%hashes.length;
+                        if(findex >= index) _first = n;
                     }else if(cursor){
                         cursor.index!N.insertNext(n);
                     }else{
                         hashes[index] = n;
+                        if(!_first) n = _first;
+                        else{
+                            size_t findex = 
+                                hash(key(_first.value))%hashes.length;
+                            if(findex > index) _first = n;
+                        }
                     }
                 }
             }else{
@@ -2660,9 +2824,15 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     if(cursor){
                         cursor.insertNext(n);
                     }else{
-                        size_t index = hash(key(n.value));
+                        size_t index = hash(key(n.value))%hashes.length;
                         assert ( !hashes[index] );
                         hashes[index] = n;
+                        if(!_first) _first = n;
+                        else{
+                            size_t findex = 
+                                hash(key(_first.value))%hashes.length;
+                            if(findex >= index) _first = n;
+                        }
                     }
                 }
             }
@@ -2671,10 +2841,19 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 if(n.index!N.prev){
                     n.index!N.prev.index!N.removeNext();
                 }else{
-                    size_t index = hash(key(n.value));
-                    hashes[index] = n.index!N.next;
-                    if (n.index!N.next){
-                        n.index!N.next.index!N.removePrev();
+                    size_t index = hash(key(n.value))%hashes.length;
+                    auto nxt = n.index!N.next;
+                    hashes[index] = nxt;
+                    if (nxt){
+                        nxt.index!N.removePrev();
+                        if(_first == n){
+                            _first = nxt;
+                        }
+                    }else if(_first == n){
+                        while(index < hashes.length && !hashes[index]){
+                            index++;
+                        }
+                        if(index < hashes.length) _first = hashes[index];
                     }
                 }
             }
@@ -2700,24 +2879,41 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 }
 
                 auto r = opSlice();
-                hashes = new ThisNode*[](primes[i]);
+                auto newhashes = new ThisNode*[](primes[i]);
+                ThisNode* newfirst;
+                size_t newfindex = -1;
                 while(!r.empty){
                     ThisNode* node = r.node;
-                    ThisNode* cursor;
-                    size_t index;
+                    ThisNode* node2 = node;
+                    auto k = key(node.value);
+                    size_t index = hash(key(node.value))%newhashes.length;
                     r.popFront();
-                    if(_find(key(node.value), cursor, index)){
-                        if(!cursor.index!N.prev){
-                            hashes[index] = node;
+                    writefln("empty=%s, r.node=%s", r.empty, r.node);
+                    while(!r.empty && eq(k, key(r.front))){
+                        node2 = r.node;
+                        r.popFront();
+                        writefln("empty=%s, r.node=%s", r.empty, r.node);
+                    }
+                    node.index!N.prev = null;
+                    node2.index!N.next = null;
+                    if(!newhashes[index]){
+                        newhashes[index] = node;
+                        if (index < newfindex){
+                            newfirst = node;
+                            newfindex = index;
                         }
-                        cursor.index!N.insertPrev(node);
-                    }else if (cursor){
-                        cursor.index!N.insertNext(node);
                     }else{
-                        hashes[index] = node;
-                        node.index!N.prev = node.index!N.next = null;
+                        auto p = newhashes[index];
+                        newhashes[index] = node;
+                        node2.index!N.insertNext(p);
+                        if(newfirst == p){
+                            newfirst = node;
+                        }
                     }
                 }
+
+                hashes = newhashes;
+                _first = newfirst;
             }
 /**
 insert value into this container. For Unique variant, will refuse value
@@ -2754,12 +2950,18 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                     // meh, lets not walk to the end of equal range
                     if (node.index!N.prev is null){
                         hashes[index] = newnode;
+                        if (index < hash(key(_first.value))%hashes.length){
+                            _first = newnode;
+                        }
                     }
                     node.insertPrev(newnode);
                 }else if(node){
                     node.insertNext(newnode);
                 }else{
                     hashes[index] = newnode;
+                    if (_first is null || index < hash(key(_first.value))%hashes.length){
+                        _first = newnode;
+                    }
                 }
                 return 1;
             }
@@ -2804,41 +3006,19 @@ $(BIGOH n $(SUB r) * d(n)), $(BR)
 $(BIGOH n $(SUB r)) for this index
 */
             Range remove(R)( R r )
-            if( is(R == Range) || is(R == Take!Range)){
+            if( is(R == Range) || is(R == ListRange) ||
+                is(R == Take!Range) || is(R == Take!ListRange)){
                 while(!r.empty){
-                    static if(is(R == Range)){
+                    static if( is(R == Range) || is(R == ListRange)){
                         ThisNode* node = r.node;
-                    }else{
+                    }else static if(
+                            is(R == Take!Range) || is(R == Take!ListRange)){
                         ThisNode* node = r.source.node;
-                    }
+                    }else static assert(false);
                     r.popFront();
                     _RemoveAll(node);
                 }
-                return Range(hashes[0 .. 0]);
-            }
-
-/** 
-Removes all of r from this container.
-Preconditions:
-r came from this index
-Returns:
-an empty range
-Complexity:
-$(BIGOH n $(SUB r) * d(n)), $(BR)
-$(BIGOH n $(SUB r)) for this index
-*/
-            Range remove (R)( R r )
-            if(is(R == ListRange) || is(R == Take!ListRange)){
-                while(!r.empty){
-                    static if (is(R == ListRange)){
-                        ThisNode* node = r._front;
-                    }else{
-                        ThisNode* node = r.source._front;
-                    }
-                    r.popFront();
-                    _RemoveAll(node);
-                }
-                return Range(hashes[0 .. 0]);
+                return Range(c, null, hashes.length);
             }
 
 /** 
@@ -2896,7 +3076,7 @@ n2.index!1 .next = n1;
 n1.index!2 .left = n2;
 ----
 +/
-struct MNode(IndexedBy, Value){
+struct MNode(ThisContainer, IndexedBy, Value){
     Value value;
 
     template ForEachIndex(size_t N,L...){
@@ -2906,7 +3086,7 @@ struct MNode(IndexedBy, Value){
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(typeof(this),Value,$N) M$N;
+                    alias L$N.Inner!(ThisContainer, typeof(this),Value,$N) M$N;
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                 },  "$N", toStringNow!N) ~ 
@@ -2924,15 +3104,15 @@ struct MNode(IndexedBy, Value){
 The container
 +/
 class MultiIndexContainer(Value, IndexedBy){
-    alias MNode!(IndexedBy,Value) ThisNode;
+    alias MNode!(typeof(this), IndexedBy,Value) ThisNode;
 
     size_t node_count;
 
 
     template ForEachCtorMixin(size_t i){
         static if(i < IndexedBy.List.length){
-            static if(is(typeof(IndexedBy.List[i].Inner!(ThisNode,const(Value),i).IndexCtorMixin))){
-                enum result =  IndexedBy.List[i].Inner!(ThisNode,const(Value),i).IndexCtorMixin ~ ForEachCtorMixin!(i+1).result;
+            static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), ThisNode,const(Value),i).IndexCtorMixin))){
+                enum result =  IndexedBy.List[i].Inner!(typeof(this), ThisNode,const(Value),i).IndexCtorMixin ~ ForEachCtorMixin!(i+1).result;
             }else enum result = ForEachCtorMixin!(i+1).result;
         }else enum result = "";
     }
@@ -3019,6 +3199,41 @@ denied:
         dealloc(node);
     }
 
+    template ForEachIndexPosition(size_t i){
+        static if(i < IndexedBy.List.length){
+            static if(is(typeof(index!i ._NodePosition((ThisNode*).init)))){
+                enum ante = Replace!(q{
+                    auto pos$i = index!$i ._NodePosition(node);
+                }, "$i",toStringNow!i) ~ ForEachIndexPosition!(i+1).ante;
+                enum post = Replace!(q{
+                    if(!index!$i ._FixPosition(node, pos$i)) goto denied;
+                }, "$i", toStringNow!i) ~ ForEachIndexPosition!(i+1).post;
+            }else{
+                enum ante = ForEachIndexPosition!(i+1).ante;
+                enum post = ForEachIndexPosition!(i+1).post;
+            }
+        }else{
+            enum ante = "";
+            enum post = "";
+        }
+    }
+
+/**
+Perform mod on node.value and perform any necessary fixups to this container's 
+indeces. mod may be of the form void mod(ref Value), in which case mod directly modifies the value in node. If the result of mod violates any index' invariant,
+the node is removed from the container. 
+Preconditions: mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH m(n)) 
+*/
+    void _Modify(Modifier)(ThisNode* node, Modifier mod){
+        mixin(ForEachIndexPosition!0 .ante);
+        mod(node.value);
+        mixin(ForEachIndexPosition!0 .post);
+        return;
+denied:
+        _RemoveAll(node);
+    }
+
     template ForEachAlias(size_t N,size_t index, alias X){
         alias X.Inner!(ThisNode,Value,N).Index!() Index;
         static if(Index.container_aliases.length > index){
@@ -3035,7 +3250,7 @@ denied:
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(ThisNode,Value,$N) M$N;
+                    alias L$N.Inner!(typeof(this),ThisNode,Value,$N) M$N;
                     mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                     class Index$N{
@@ -3084,6 +3299,7 @@ int[] arr(Range)(Range r){
 }
 version(TestMultiIndex)
 void main(){
+    /+
     alias MNode!(IndexedBy!(
                 Sequenced!(), 
                 OrderedUnique!(),
@@ -3093,6 +3309,7 @@ void main(){
     enum R = 1;
     n1.index!0 .next = n2;
     n1.index!1 .left = n2;
+    +/
     alias MultiIndexContainer!(int, 
             IndexedBy!(Sequenced!())) C;
             /+
