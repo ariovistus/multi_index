@@ -233,16 +233,15 @@ module multi_index;
  *   special constructor for SortedRange?
  *  random access index
  *   insertAfter ? insertBefore ?
- *  hashed index
- *   rehash
  *  move semantics ?
  *  tagging
  *  other indeces? 
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
- *  replace functionality
+ *  replace functionality - also, output ranges might be good for this?
  *  clear functionality
  *  op ~ 
+ *  
  */
 
 import std.array;
@@ -384,7 +383,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 */
-            @property size_t length(){
+            @property size_t length() const{
                 return node_count;
             }
 
@@ -441,6 +440,26 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
                 assert (0);
             }
 
+/**
+Perform mod on r.front and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, r.front is
+removed from the container.
+Preconditions: !r.empty, $(BR)
+mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index 
+*/
+
+            void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
+            if(is(SomeRange == Range) || 
+                    is(SomeRange == typeof(retro(Range.init)))) {
+                static if(is(SomeRange == Range)){
+                    ThisNode* node = r.node;
+                }else{
+                    ThisNode* node = r.source._back;
+                }
+                _Modify(node, mod);
+            }
+
             bool _insertFront(ThisNode* node) nothrow
                 in{
                     debug assert(node !is null);
@@ -456,9 +475,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
                     return true;
                 }
 
-            void _Insert(ThisNode* n){
-                _insertBack(n);
-            }
+            alias _insertBack _Insert;
 
             bool _insertBack(ThisNode* node) nothrow
                 in{
@@ -501,7 +518,7 @@ this index
                     foreach(item; stuff){
                         ThisNode* node = _InsertAllBut!N(item);
                         if (!node) continue;
-                        prev.insertNext(node);
+                        prev.index!N.insertNext(node);
                         prev = node;
                         count ++;
                     }
@@ -587,6 +604,7 @@ Forwards to insertBack
                 }else{
                     ThisNode* prev = n.index!N.prev;
                     prev.index!N.removeNext();
+                    if(n is _back) _back = prev;
                 }
             }
 
@@ -648,8 +666,6 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 return Range(null,null);
             }
 
-
-
 /+
                 todo:
                 stableRemoveAny 
@@ -657,9 +673,6 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 stableRemoveBack
                 stableLinearRemove
                 +/
-
-
-
         }
     }
 }
@@ -669,7 +682,7 @@ template RandomAccess(){
     /// _
     template Inner(ThisContainer,ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
-        alias TypeTuple!(N) IndexTuple;
+        alias TypeTuple!(N,ThisContainer) IndexTuple;
 
         // node implementation 
         // all the overhead is in the index
@@ -684,7 +697,7 @@ template RandomAccess(){
         // dangit, ddoc, show my single starting underscore!
         /// ThisNode, Value, __InsertAllBut!N, __InsertAll,  __Replace, 
         /// __RemoveAllBut!N, node_count
-        mixin template IndexMixin(size_t N){
+        mixin template IndexMixin(size_t N, ThisContainer){
             ThisNode*[] ra;
 
             /// Defines the index' primary range, which embodies a
@@ -692,6 +705,10 @@ template RandomAccess(){
             struct Range{
                 ThisContainer c;
                 size_t s, e;
+
+                @property ThisNode* node(){
+                    return c.ra[s];
+                }
 
                 const(Value) front(){ 
                     assert(s < e && e <= c.length);
@@ -713,8 +730,8 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
                     e--;
                 }
 
-                @property bool empty(){ return s >= e; }
-                @property size_t length(){ return s <= e ? e-s : 0; }
+                @property bool empty()const{ return s >= e; }
+                @property size_t length()const { return s <= e ? e-s : 0; }
 
                 const(Value) back(){ 
                     assert(s < e && e <= c.length);
@@ -738,7 +755,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 Range save(){ return this; }
 
-                const(Value) opIndex(size_t i){ return ra[i].value; }
+                const(Value) opIndex(size_t i){ return c.ra[i].value; }
             }
 
 /**
@@ -767,7 +784,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 */
-            @property size_t length(){
+            @property size_t length()const{
                 return node_count;
             }
 
@@ -890,6 +907,10 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
             // todo stableRemoveAny
             // todo stableRemoveBack
 
+/**
+inserts value in the back of this index.
+Complexity: $(BIGOH i(n)), $(BR) amortized $(BIGOH 1) for this index
+*/
             size_t insertBack(SomeValue)(SomeValue value)
             if(isImplicitlyConvertible!(SomeValue, const(Value)))
             {
@@ -901,6 +922,28 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 return 1;
             }
 
+/**
+inserts elements of r in the back of this index.
+Complexity: $(BIGOH n $(SUB r) * i(n)), $(BR) amortized $(BIGOH n $(SUB r)) 
+for this index
+*/
+            size_t insertBack(SomeRange)(SomeRange r)
+            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+            {
+                enum haslen = hasLength!SomeRange;
+
+                static if(haslen){
+                    if(capacity() < node_count + r.length){
+                        reserve(node_count + r.length);
+                    }
+                }
+                size_t count = 0;
+                foreach(e; r){
+                    count += insertBack(e);
+                }
+                return count;
+            }
+
             void _Insert(ThisNode* node){
                 if (node_count >= ra.length){
                     reserve(max(ra.length * 2 + 1, node_count+1));
@@ -908,27 +951,51 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 ra[node_count] = node;
             }
 
+/**
+inserts elements of r in the back of this index.
+Complexity: $(BIGOH n $(SUB r) * i(n)), $(BR) amortized $(BIGOH n $(SUB r)) 
+for this index
+*/
             alias insertBack insert;
             // todo stableInsertBack 
 
+/**
+Perform mod on r.front and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, r.front is
+removed from the container.
+Preconditions: !r.empty, $(BR)
+mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index 
+*/
+
+            void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
+            if(is(SomeRange == Range) || 
+                    is(SomeRange == typeof(retro(Range.init)))) {
+                static if(is(SomeRange == Range)){
+                    ThisNode* node = r.node;
+                }else{
+                    ThisNode* node = ra[r.source.e-1];
+                }
+                _Modify(node, mod);
+            }
+
+/**
+removes elements of r from this container.
+Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n)
+for this index
+*/
             Range linearRemove(Range r){
                 size_t _length = node_count;
-                if( ra.ptr <= r.ra.ptr && r.ra.ptr < ra.ptr + _length){
-                    size_t rstart = r.ra.ptr - ra.ptr;
-                    size_t rend = rstart + r.length;
-                    size_t newlen = _length - (rend-rstart);
-                    while(!r.empty){
-                        _RemoveAllBut!N(r.ra[0]);
-                        dealloc(r.ra[0]);
-                    }
-                    copy(ra[rend .. _length], ra[rstart .. newlen]);
-                    fill(ra[newlen .. _length], cast(ThisNode*) null);
-                    _length -= rend-rstart;
-                    return Range(ra[rstart .. _length]);
-                }else{
-                    return Range(ra[_length .. _length]);
+                size_t newlen = _length - (r.e-r.s);
+                while(!r.empty){
+                    ThisNode* node = r.node;
+                    _RemoveAllBut!N(node);
+                    dealloc(node);
                 }
-
+                copy(ra[r.e .. _length], ra[r.s .. newlen]);
+                fill(ra[newlen .. _length], cast(ThisNode*) null);
+                _length -= r.e-r.s;
+                return Range(this, r.s, _length);
             }
             // stableLinearRemove
         }
@@ -1553,7 +1620,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     static if(!allowDuplicates){
         bool _DenyInsertion(Node n, out Node cursor){
             bool found;
-            _find2(n.value, found, cursor);
+            _find2(key(n.value), found, cursor);
             return found;
         }
     }
@@ -1732,7 +1799,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 +/
-        @property size_t length()
+        @property size_t length()const
         {
             return node_count;
         }
@@ -1810,6 +1877,54 @@ $(BIGOH log(n))
             Node n = _find(k);
             enforce(n);
             return n.value;
+        }
+    }
+
+/**
+Perform mod on r.front and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, r.front is
+removed from the container.
+Preconditions: !r.empty, $(BR)
+mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index 
+*/
+
+    void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
+    if(is(SomeRange == Range)) {
+        Node node = r.node;
+        _Modify(node, mod);
+    }
+
+    KeyType _NodePosition(ThisNode* node){
+        return key(node.value);
+    }
+
+    bool _FixPosition(ThisNode* node, KeyType oldPosition){
+        // case 1: key hasn't changed
+        auto newPosition = key(node.value);
+        if(!_less(newPosition, oldPosition) && 
+           !_less(oldPosition, newPosition)) return true;
+        Node next = node.index!N.next;
+        Node prev = node.index!N.prev;
+        
+        // case 2: key has changed, but relative position hasn't
+        bool outOfBounds = (next && !_less(newPosition, key(next.value))) ||
+            prev && !_less(key(prev.value), newPosition);
+        if (!outOfBounds) return true;
+
+        // case 3: key has changed, position has changed
+        static if(allowDuplicates){
+            _Remove(node);
+            _Insert(node);
+            return true;
+        }else{
+            bool found;
+            Node cursor;
+            _find2(newPosition, found, cursor);
+            if(found) return false;
+            _Remove(node);
+            _Insert(node, cursor);
+            return true;
         }
     }
 
@@ -2250,6 +2365,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
+            alias typeof(key((const(Value)).init)) KeyType;
 
             ThisNode*[] _heap;
 
@@ -2314,6 +2430,10 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 ThisContainer c;
                 size_t s,e;
 
+                @property ThisNode* node(){
+                    return c.index!N._heap[s];
+                }
+
                 const(Value) front(){ 
                     return c.index!N._heap[s].value; 
                 }
@@ -2329,11 +2449,11 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     e--;
                 }
 
-                @property bool empty(){ 
+                @property bool empty()const{ 
                     assert(e <= c.index!N.length);
                     return s >= c.index!N.length; 
                 }
-                @property size_t length(){ 
+                @property size_t length()const{ 
                     assert(e <= c.index!N.length);
                     return s <= e ? e - s : 0;
                 }
@@ -2355,7 +2475,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 */
-            @property size_t length(){
+            @property size_t length()const{
                 return node_count;
             }
 
@@ -2365,7 +2485,7 @@ elements.
 
 Complexity: $(BIGOH 1)
 */
-            @property bool empty(){
+            @property bool empty()const{
                 return node_count == 0;
             }
 
@@ -2391,10 +2511,36 @@ Complexity: $(BIGOH 1)
             }
 
 /**
+Perform mod on r.front and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, r.front is
+removed from the container.
+Preconditions: !r.empty, $(BR)
+mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index 
+*/
+
+            void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
+                if(is(SomeRange == Range)) {
+                    ThisNode* node = r.node;
+                    _Modify(node, mod);
+                }
+
+            KeyType _NodePosition(ThisNode* node){
+                return key(node.value);
+            }
+
+            bool _FixPosition(ThisNode* node, KeyType oldPosition){
+                auto newPosition = key(node.value);
+                // sift will take O(1) if key hasn't changed
+                sift(node.index!N._index);
+                return true;
+            }
+
+/**
 Returns the _capacity of the index, which is the length of the
 underlying store 
 */
-            @property size_t capacity(){
+            @property size_t capacity()const{
                 return _heap.length;
             }
 
@@ -2421,10 +2567,20 @@ Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
             {
                 ThisNode* n = _InsertAllBut!N(value);
                 if(!n) return 0;
-                node_count++;
-                _Insert(n);
                 node_count--;
+                _Insert(n);
+                node_count++;
                 return 1;
+            }
+
+            size_t insert(SomeRange)(SomeRange r)
+            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+            {
+                size_t count;
+                foreach(e; r){
+                    count += insert(e);
+                }
+                return count;
             }
 
             void _Insert(ThisNode* node){
@@ -2472,8 +2628,9 @@ No idea.
 Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
 */
             void removeBack(){
-                _RemoveAllBut!N(_heap[node_count-1]);
-                dealloc(_heap[node_count-1]);
+                ThisNode* node = _heap[node_count-1];
+                _RemoveAllBut!N(node);
+                dealloc(node);
             }
             /// todo stableRemoveBack
 
@@ -2481,16 +2638,14 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
             if (is(R == Range) || is(R == Take!Range)){
                 while(!r.empty){
                     static if(is(R == Range)){
-                        ThisNode* node = r._rng[0];
+                        ThisNode* node = r.node;
                     }else{
-                        ThisNode* node = r.source._rng[0];
+                        ThisNode* node = r.source.node;
                     }
-                    writefln(" remove! %s %s", node,node_count);
                     r.popFront();
                     _RemoveAll(node);
-                    writefln(" post remove! %s", node_count);
                 }
-                return Range(_heap[0 .. 0]);
+                return Range(this,0,0);
             }
         }
     }
@@ -2581,11 +2736,11 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 ThisNode* node;
                 size_t n;
 
-                @property bool empty(){
+                @property bool empty()const{
                     return n >= c.hashes.length;
                 }
 
-                const(Value) front(){
+                const(Value) front()const{
                     return node.value;
                 }
 
@@ -2616,7 +2771,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 */
-            @property size_t length(){
+            @property size_t length()const{
                 return node_count;
             }
 
@@ -2626,7 +2781,7 @@ elements.
 
 Complexity: $(BIGOH 1)
 */
-            @property bool empty(){
+            @property bool empty()const{
                 return node_count == 0;
             }
 

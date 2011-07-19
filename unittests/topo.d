@@ -13,7 +13,7 @@ struct Node{
     StringSet children;
     StringSet parents;
 
-    size_t order(){
+    size_t order()const{
         return children.length + parents.length;
     }
 }
