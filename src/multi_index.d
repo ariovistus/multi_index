@@ -1346,9 +1346,9 @@ mixin template OrderedNodeMixin(size_t N){
             if(_parent !is y)
             {
                 if(isyleft)
-                    yp.left = &this;
+                    yp.index!N.left = &this;
                 else
-                    yp.right = &this;
+                    yp.index!N.right = &this;
             }
             color = yc;
 
@@ -1404,7 +1404,7 @@ mixin template OrderedNodeMixin(size_t N){
                     }
                     else
                     {
-                        if(wr is null || wr.color == Color.Black)
+                        if(wr is null || wr.index!N.color == Color.Black)
                         {
                             // wl cannot be null here
                             wl.index!N.color = Color.Black;
@@ -1417,7 +1417,7 @@ mixin template OrderedNodeMixin(size_t N){
                         x.index!N._parent.index!N.color = Color.Black;
                         w.index!N._right.index!N.color = Color.Black;
                         x.index!N._parent.index!N.rotateL();
-                        x = end.left; // x = root
+                        x = end.index!N.left; // x = root
                     }
                 }
                 else
@@ -1441,7 +1441,7 @@ mixin template OrderedNodeMixin(size_t N){
                     }
                     else
                     {
-                        if(wl is null || wl.color == Color.Black)
+                        if(wl is null || wl.index!N.color == Color.Black)
                         {
                             // wr cannot be null here
                             wr.index!N.color = Color.Black;
@@ -1525,7 +1525,7 @@ mixin template OrderedNodeMixin(size_t N){
     @property Node prev()
     {
         Node n = &this;
-        if(n.left is null)
+        if(n.index!N.left is null)
         {
             while(n.index!N.isLeftNode)
                 n = n.index!N._parent;
@@ -1715,7 +1715,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
             Node node = _end.index!N.prev;
             popBack();
             c._RemoveAllBut!N(node);
-            _end = c._Remove(node);
+            _end = c.index!N._Remove(node);
         }
 
         /**
@@ -1889,6 +1889,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
         // case 3: key has changed, position has changed
         static if(allowDuplicates){
             _Remove(node);
+            node.index!N._parent = 
+                node.index!N._left = 
+                node.index!N._right = null;
+            node.index!N.color = Color.Red;
             _Insert(node);
             return true;
         }else{
@@ -2211,7 +2215,7 @@ Complexity: $(BIGOH log(n))
     Range bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType))
     in{
-        if(boundaries == "[]") assert(!_less(upper,lower));
+        static if(boundaries == "[]") assert(!_less(upper,lower));
         else assert(_less(lower,upper));
     }body{
         static if(boundaries == "[]"){
@@ -2234,12 +2238,12 @@ Complexity: $(BIGOH log(n))
         {
             if(n !is null)
             {
-                printTree(n.right, indent + 2);
+                printTree(n.index!N.right, indent + 2);
                 for(int i = 0; i < indent; i++)
                     write(".");
-                write(n.color == n.color.Black ? "B" : "R");
+                write(n.index!N.color == Color.Black ? "B" : "R");
                 writefln("(%s)", n.value);
-                printTree(n.left, indent + 2);
+                printTree(n.index!N.left, indent + 2);
             }
             else
             {
@@ -2266,9 +2270,9 @@ Complexity: $(BIGOH log(n))
             {
                 if(n is null)
                     return 1;
-                if(n.parent.left !is n && n.parent.right !is n)
+                if(n.index!N.parent.index!N.left !is n && n.index!N.parent.index!N.right !is n)
                     throw new Exception("Node at path " ~ path ~ " has inconsistent pointers");
-                Node next = n.next;
+                Node next = n.index!N.next;
                 static if(allowDuplicates)
                 {
                     if(next !is _end && _less(key(next.value), key(n.value)))
@@ -2279,31 +2283,31 @@ Complexity: $(BIGOH log(n))
                     if(next !is _end && !_less(key(n.value), key(next.value)))
                         throw new Exception("ordering invalid at path " ~ path);
                 }
-                if(n.color == n.color.Red)
+                if(n.index!N.color == Color.Red)
                 {
-                    if((n.left !is null && n.left.color == n.color.Red) ||
-                            (n.right !is null && n.right.color == n.color.Red))
+                    if((n.index!N.left !is null && n.index!N.left.index!N.color == Color.Red) ||
+                            (n.index!N.right !is null && n.index!N.right.index!N.color == Color.Red))
                         throw new Exception("Node at path " ~ path ~ " is red with a red child");
                 }
 
-                int l = recurse(n.left, path ~ "L");
-                int r = recurse(n.right, path ~ "R");
+                int l = recurse(n.index!N.left, path ~ "L");
+                int r = recurse(n.index!N.right, path ~ "R");
                 if(l != r)
                 {
                     writeln("bad tree at:");
                     printTree(n);
                     throw new Exception("Node at path " ~ path ~ " has different number of black nodes on left and right paths");
                 }
-                return l + (n.color == n.color.Black ? 1 : 0);
+                return l + (n.index!N.color == Color.Black ? 1 : 0);
             }
 
             try
             {
-                recurse(_end.left, "");
+                recurse(_end.index!N.left, "");
             }
             catch(Exception e)
             {
-                printTree(_end.left, 0);
+                printTree(_end.index!N.left, 0);
                 throw e;
             }
         }
@@ -2317,7 +2321,9 @@ template Ordered(bool allowDuplicates = false, alias KeyFromValue="a",
         alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
 
-        enum IndexCtorMixin = "_end = alloc();";
+        enum IndexCtorMixin = Replace!(q{
+            index!($N)._end = alloc();
+        }, "$N", toStringNow!N);
         /// node implementation (ish)
         alias TypeTuple!(N) NodeTuple;
         alias OrderedNodeMixin NodeMixin;
@@ -3418,6 +3424,11 @@ denied:
                             return this.outer.index!($N).opIndexAssign(ts);
                         }
 
+                        // grr opdispatch not handle this one
+                        auto opBinaryRight(string op, T...)(T ts){
+                            return this.outer.index!($N).opBinaryRight!(op)(ts);
+                        }
+
                         /+
                         // grr opdispatch not handle this one
                         static if(is(typeof(this.outer.index!($N).opIn(Value.init)))){
@@ -3426,6 +3437,11 @@ denied:
                             }
                         }
                         +/
+
+                        // grr opdispatch not handle this one
+                        auto bounds(string bs = "[]", T)(T t1, T t2){
+                            return this.outer.index!($N).bounds!(bs,T)(t1,t2);
+                        }
 
                         auto opDispatch(string s, T...)(T args){
                             mixin("return this.outer.index!($N)."~s~"(args);");
