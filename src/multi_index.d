@@ -707,12 +707,12 @@ template RandomAccess(){
                 size_t s, e;
 
                 @property ThisNode* node(){
-                    return c.ra[s];
+                    return c.index!N.ra[s];
                 }
 
                 const(Value) front(){ 
-                    assert(s < e && e <= c.length);
-                    return c.ra[s].value; 
+                    assert(s < e && e <= c.index!N.length);
+                    return c.index!N.ra[s].value; 
                 }
 
                 void popFront(){ s++; }
@@ -724,7 +724,7 @@ Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 */
                 void removeFront(){
-                    ThisNode* node = c.ra[s];
+                    ThisNode* node = c.index!N.ra[s];
                     c._RemoveAll(node);
                     // c will shift everything down
                     e--;
@@ -734,8 +734,8 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
                 const(Value) back(){ 
-                    assert(s < e && e <= c.length);
-                    return c.ra[e-1].value;
+                    assert(s < e && e <= c.index!N.length);
+                    return c.index!N.ra[e-1].value;
                 }
 
                 void popBack(){ e--; }
@@ -747,7 +747,7 @@ Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 */
                 void removeBack(){ 
-                    ThisNode* node = c.ra[e-1];
+                    ThisNode* node = c.index!N.ra[e-1];
                     c._RemoveAll(node);
                     // c will shift everything down
                     e--;
@@ -755,7 +755,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 Range save(){ return this; }
 
-                const(Value) opIndex(size_t i){ return c.ra[i].value; }
+                const(Value) opIndex(size_t i){ return c.index!N.ra[i].value; }
             }
 
 /**
@@ -986,16 +986,19 @@ for this index
 */
             Range linearRemove(Range r){
                 size_t _length = node_count;
-                size_t newlen = _length - (r.e-r.s);
+                size_t s = r.s;
+                size_t e = r.e;
+                size_t newlen = _length - (e-s);
                 while(!r.empty){
                     ThisNode* node = r.node;
                     _RemoveAllBut!N(node);
                     dealloc(node);
+                    r.popFront();
                 }
-                copy(ra[r.e .. _length], ra[r.s .. newlen]);
+                copy(ra[e .. _length], ra[s .. newlen]);
                 fill(ra[newlen .. _length], cast(ThisNode*) null);
-                _length -= r.e-r.s;
-                return Range(this, r.s, _length);
+                _length -= e-s;
+                return Range(this, s, _length);
             }
             // stableLinearRemove
         }
@@ -1615,13 +1618,11 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
      */
     alias const(Value) Elem;
 
-    private Node   _end;
+    Node   _end;
 
     static if(!allowDuplicates){
         bool _DenyInsertion(Node n, out Node cursor){
-            bool found;
-            _find2(key(n.value), found, cursor);
-            return found;
+            return _find2(key(n.value), cursor);
         }
     }
 
@@ -1633,6 +1634,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
             }else{
                 cursor.index!N.right = n;
             }
+            n.index!N.setColor(_end);
         }else{
             _add(n);
         }
@@ -1646,6 +1648,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     {
         ThisContainer c;   
         private Node _begin;
+        alias _begin node;
         private Node _end;
 
         /**
@@ -1724,51 +1727,14 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
         }
     }
 
-    // find a node based on an element value
-    private Node _find(KeyType k)
-    {
-        static if(allowDuplicates)
-        {
-            Node cur = _end.index!N.left;
-            Node result = null;
-            while(cur)
-            {
-                auto ck = key(cur.value);
-                if(_less(ck, k))
-                    cur = cur.index!N.right;
-                else if(_less(k, ck))
-                    cur = cur.index!N.left;
-                else
-                {
-                    // want to find the left-most element
-                    result = cur;
-                    cur = cur.index!N.left;
-                }
-            }
-            return result;
-        }
-        else
-        {
-            Node cur = _end.index!N.left;
-            while(cur)
-            {
-                auto ck = key(cur.value);
-                if(_less(ck, k))
-                    cur = cur.index!N.right;
-                else if(_less(k, ck))
-                    cur = cur.index!N.left;
-                else
-                    return cur;
-            }
-            return null;
-        }
-    }
-
-    private void _find2(KeyType k, out bool found, out Node par)
+    // if k exists in this index, returns par such that eq(key(par.value),k), 
+    // and returns true
+    // if k !exists in this index, returns par such that k value belongs either
+    // as par.left or par.right. remember to setColor! returns false.
+    private bool _find2(KeyType k, out Node par)
     {
         Node cur = _end.index!N.left;
         par = null;
-        found = false;
         while(cur)
         {
             auto ck = key(cur.value);
@@ -1778,10 +1744,10 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
             }else if(_less(k, ck)){
                 cur = cur.index!N.left;
             }else{
-                found = true;
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     /**
@@ -1842,7 +1808,8 @@ Complexity: $(BIGOH 1).
         +/
         bool opBinaryRight(string op)(Elem e) if (op == "in")
         {
-            return _find(key(e)) !is null;
+            Node p;
+            return _find2(key(e),p);
         }
     /++
         $(D in) operator. Check to see if the given element exists in the
@@ -1850,10 +1817,13 @@ Complexity: $(BIGOH 1).
 
         Complexity: $(BIGOH log(n))
         +/
-        bool opBinaryRight(string op,K)(K k) if (op == "in" &&
-                isImplicitlyConvertible!(K, KeyType))
-        {
-            return _find(k) !is null;
+        static if(!isImplicitlyConvertible!(KeyType, Elem)){
+            bool opBinaryRight(string op,K)(K k) if (op == "in" &&
+                    isImplicitlyConvertible!(K, KeyType))
+            {
+                Node p;
+                return _find2(k,p);
+            }
         }
 
     /**
@@ -1874,8 +1844,8 @@ Complexity:
 $(BIGOH log(n))
 */
         const(Value) opIndex(KeyType k){
-            Node n = _find(k);
-            enforce(n);
+            Node n; 
+            enforce(_find2(k,n));
             return n.value;
         }
     }
@@ -1899,7 +1869,11 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
         return key(node.value);
     }
 
-    bool _FixPosition(ThisNode* node, KeyType oldPosition){
+    bool _FixPosition(ThisNode* node, KeyType oldPosition)
+        out(r){
+            version(RBDoChecks)
+                check();
+        }body{
         // case 1: key hasn't changed
         auto newPosition = key(node.value);
         if(!_less(newPosition, oldPosition) && 
@@ -1918,12 +1892,18 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
             _Insert(node);
             return true;
         }else{
-            bool found;
             Node cursor;
-            _find2(newPosition, found, cursor);
-            if(found) return false;
+            bool found = _find2(newPosition, cursor);
+            if(found && cursor !is node) return false;
             _Remove(node);
-            _Insert(node, cursor);
+            node.index!N._parent = 
+                node.index!N._left = 
+                node.index!N._right = null;
+            node.index!N.color = Color.Red;
+            if(cursor is node) _add(node);
+            else{
+                _Insert(node, cursor);
+            }
             return true;
         }
     }
@@ -1936,26 +1916,20 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
      */
     size_t stableInsert(Stuff)(Stuff stuff) 
         if (isImplicitlyConvertible!(Stuff, Elem))
-        {
+        out(r){
+            version(RBDoChecks)
+                check();
+        }body{
             static if(!allowDuplicates){
-                bool found;
                 Node p;
-                if((_find2(stuff,found,p), found)){
+                if(_find2(key(stuff),p)){
                     return 0;
                 }
             }
             Node n = _InsertAllBut!N(stuff);
-
             if(!n) return 0;
-
             static if(!allowDuplicates){
-                if(p){
-                    if (_less(key(n.value), key(p.value))){
-                        p.index!N.left = n;
-                    }else{
-                        p.index!N.right = n;
-                    }
-                }else _add(n);
+                _Insert(n,p);
             }else _add(n);
             return 1;
         }
@@ -1970,7 +1944,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     size_t stableInsert(Stuff)(Stuff stuff) 
         if(isInputRange!Stuff && 
                 isImplicitlyConvertible!(ElementType!Stuff, Elem))
-        {
+        out(r){
+            version(RBDoChecks)
+                check();
+        }body{
             size_t result = 0;
             foreach(e; stuff)
             {
@@ -1982,7 +1959,11 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     /// ditto
     alias stableInsert insert;
 
-    Node _Remove(Node n){
+    Node _Remove(Node n)
+    out(r){
+        version(RBDoChecks)
+            check();
+    }body{
         return n.index!N.remove(_end);
     }
 
@@ -1991,13 +1972,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
      *
      * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
-    Elem removeAny()
-    {
+    Elem removeAny() {
         auto n = _end.index!N.leftmost;
         auto result = n.value;
         _RemoveAll(n);
-        version(RBDoChecks)
-            check();
         return result;
     }
 
@@ -2006,12 +1984,9 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
      *
      * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
-    void removeFront()
-    {
+    void removeFront() {
         auto n = _end.index!N.leftmost;
         _RemoveAll(n);
-        version(RBDoChecks)
-            check();
     }
 
     /**
@@ -2019,12 +1994,9 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
      *
      * Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
      */
-    void removeBack()
-    {
+    void removeBack() {
         auto n = _end.index!N.prev;
         _RemoveAll(n);
-        version(RBDoChecks)
-            check();
     }
 
     /++
@@ -2037,7 +2009,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
                 log(n)) for this index
     +/
     Range remove(Range r)
-    {
+    out(r){
+        version(RBDoChecks)
+            check();
+    }body{
         auto b = r._begin;
         auto e = r._end;
         while(b !is e)
@@ -2047,8 +2022,6 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
             b = b.index!N.remove(_end);
             dealloc(ob);
         }
-        version(RBDoChecks)
-            check();
         return Range(this, e, _end);
     }
 
@@ -2062,7 +2035,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
                 log(n)) for this index 
     +/
     Range remove(Take!Range r)
-    {
+    out(r){
+        version(RBDoChecks)
+            check();
+    }body{
         auto b = r.source._begin;
 
         while(!r.empty)
@@ -2104,7 +2080,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     +/
     size_t removeKey(U)(U[] keys...)
     if(isImplicitlyConvertible!(U, KeyType))
-    {
+    out(r){
+        version(RBDoChecks)
+            check();
+    }body{
         size_t count = 0;
 
         foreach(k; keys)
@@ -2125,7 +2104,10 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     if(isInputRange!Stuff &&
             isImplicitlyConvertible!(ElementType!Stuff, KeyType) &&
             !is(Stuff == Elem[]))
-    {
+    out(r){
+        version(RBDoChecks)
+            check();
+    }body{
         //We use array in case stuff is a Range from this RedBlackTree - either
         //directly or indirectly.
         return removeKey(array(stuff));
@@ -2181,7 +2163,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     Range upperBound(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(_firstGreater(k), _end);
+        return Range(this,_firstGreater(k), _end);
     }
 
     /**
@@ -2193,7 +2175,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
     Range lowerBound(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(_end.index!N.leftmost, _firstGreaterEqual(k));
+        return Range(this,_end.index!N.leftmost, _firstGreaterEqual(k));
     }
 
     /**
@@ -2208,16 +2190,16 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
         auto beg = _firstGreaterEqual(k);
         if(beg is _end || _less(k, key(beg.value)))
             // no values are equal
-            return Range(beg, beg);
+            return Range(this,beg, beg);
         static if(allowDuplicates)
         {
-            return Range(beg, _firstGreater(k));
+            return Range(this,beg, _firstGreater(k));
         }
         else
         {
             // no sense in doing a full search, no duplicates are allowed,
             // so we just get the next node.
-            return Range(beg, beg.index!N.next);
+            return Range(this,beg, beg.index!N.next);
         }
     }
 
@@ -2228,20 +2210,21 @@ Complexity: $(BIGOH log(n))
 +/
     Range bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType))
-    {
+    in{
+        if(boundaries == "[]") assert(!_less(upper,lower));
+        else assert(_less(lower,upper));
+    }body{
         static if(boundaries == "[]"){
-            return Range(_firstGreaterEqual(lower), _firstGreater(upper));
+            return Range(this,_firstGreaterEqual(lower), _firstGreater(upper));
         }else static if(boundaries == "[)"){
-            return Range(_firstGreaterEqual(lower), _firstGreaterEqual(upper));
+            return Range(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
         }else static if(boundaries == "(]"){
-            return Range(_firstGreater(lower), _firstGreater(upper));
+            return Range(this, _firstGreater(lower), _firstGreater(upper));
         }else static if(boundaries == "()"){
-            return Range(_firstGreater(lower), _firstGreaterEqual(upper));
+            return Range(this, _firstGreater(lower), _firstGreaterEqual(upper));
         }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
     }
 
-    version(RBDoChecks)
-    {
         /*
          * Print the tree.  This prints a sideways view of the tree in ASCII form,
          * with the number of indentations representing the level of the nodes.
@@ -2254,7 +2237,8 @@ Complexity: $(BIGOH log(n))
                 printTree(n.right, indent + 2);
                 for(int i = 0; i < indent; i++)
                     write(".");
-                writeln(n.color == n.color.Black ? "B" : "R");
+                write(n.color == n.color.Black ? "B" : "R");
+                writefln("(%s)", n.value);
                 printTree(n.left, indent + 2);
             }
             else
@@ -2266,6 +2250,8 @@ Complexity: $(BIGOH log(n))
             if(indent is 0)
                 writeln();
         }
+    version(RBDoChecks)
+    {
 
         /*
          * Check the tree for validity.  This is called after every add or remove.
@@ -3276,10 +3262,6 @@ class MultiIndexContainer(Value, IndexedBy){
         mixin(ForEachCtorMixin!(0).result);
     }
 
-    void _Replace(ThisNode* node, const(Value) value){
-        assert(false);
-    }
-
     /// specify how to allocate a node
     ThisNode* alloc(){
         return new ThisNode;
@@ -3373,6 +3355,17 @@ denied:
         }
     }
 
+
+    void _Replace(ThisNode* node, Value value){
+        mixin(ForEachIndexPosition!0 .ante);
+        Value old = node.value;
+        node.value = value;
+        mixin(ForEachIndexPosition!0 .post);
+        return;
+denied:
+        node.value = old;
+    }
+
 /**
 Perform mod on node.value and perform any necessary fixups to this container's 
 indeces. mod may be of the form void mod(ref Value), in which case mod directly modifies the value in node. If the result of mod violates any index' invariant,
@@ -3411,9 +3404,20 @@ denied:
                     class Index$N{
 
                         // grr opdispatch not handle this one
-                        auto opSlice(){
-                            return this.outer.index!($N).opSlice;
+                        auto opSlice(T...)(T ts){
+                            return this.outer.index!($N).opSlice(ts);
                         }
+
+                        // grr opdispatch not handle this one
+                        auto opIndex(T...)(T ts){
+                            return this.outer.index!($N).opIndex(ts);
+                        }
+
+                        // grr opdispatch not handle this one
+                        auto opIndexAssign(T...)(T ts){
+                            return this.outer.index!($N).opIndexAssign(ts);
+                        }
+
                         /+
                         // grr opdispatch not handle this one
                         static if(is(typeof(this.outer.index!($N).opIn(Value.init)))){
@@ -3441,7 +3445,7 @@ denied:
     mixin(stuff);
 }
 
-import std.stdio: writeln, writefln;
+import std.stdio;
 import std.string: format;
 
 int[] arr(Range)(Range r){
