@@ -36,7 +36,7 @@ template Replacements(string base, T...){
     static if(N.ti == -1){
         enum result = base;
     }else{
-        enum result = base[0 .. N.at] ~ T[N.ti+1] ~ 
+        enum result = base[0 .. N.at] ~ toStringNow!(T[N.ti+1]) ~ 
             Replacements!(base[N.at + T[N.ti].length .. $], T).result;
     }
 }

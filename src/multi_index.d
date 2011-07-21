@@ -2323,7 +2323,7 @@ template Ordered(bool allowDuplicates = false, alias KeyFromValue="a",
 
         enum IndexCtorMixin = Replace!(q{
             index!($N)._end = alloc();
-        }, "$N", toStringNow!N);
+        }, "$N", N);
         /// node implementation (ish)
         alias TypeTuple!(N) NodeTuple;
         alias OrderedNodeMixin NodeMixin;
@@ -2706,10 +2706,10 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
         alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, N).NodeMixin 
             NodeMixin;
 
-        enum IndexCtorMixin = q{
-            hashes.length = primes[0];
-            load_factor = 0.80;
-        };
+        enum IndexCtorMixin = Replace!(q{
+            index!$N .hashes.length = primes[0];
+            index!$N .load_factor = 0.80;
+        }, "$N", N);
 
         /// index implementation
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
@@ -2731,7 +2731,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 size_t n;
 
                 @property bool empty()const{
-                    return n >= c.hashes.length;
+                    return n >= c.index!N.hashes.length;
                 }
 
                 const(Value) front()const{
@@ -2742,9 +2742,9 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                     node = node.index!N.next;
                     if(!node){
                         do n++;
-                        while(n < c.hashes.length && !c.hashes[n]);
-                        if( n < c.hashes.length ){
-                            node = c.hashes[n];
+                        while(n < c.index!N.hashes.length && !c.index!N.hashes[n]);
+                        if( n < c.index!N.hashes.length ){
+                            node = c.index!N.hashes[n];
                         }
                     }
                 }
@@ -2973,7 +2973,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 }
                 void _Insert(ThisNode* n, ThisNode* cursor){
                     if(cursor){
-                        cursor.insertNext(n);
+                        cursor.index!N.insertNext(n);
                     }else{
                         size_t index = hash(key(n.value))%hashes.length;
                         assert ( !hashes[index] );
@@ -3039,11 +3039,9 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     auto k = key(node.value);
                     size_t index = hash(key(node.value))%newhashes.length;
                     r.popFront();
-                    writefln("empty=%s, r.node=%s", r.empty, r.node);
                     while(!r.empty && eq(k, key(r.front))){
                         node2 = r.node;
                         r.popFront();
-                        writefln("empty=%s, r.node=%s", r.empty, r.node);
                     }
                     node.index!N.prev = null;
                     node2.index!N.next = null;
@@ -3092,7 +3090,6 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                     if(!newnode) return 0;
                     auto k = key(value);
                     bool found = _find(k, node, index);
-                    if(found) return 0;
                 }
                 if(maxLoad(hashes.length) < node_count+1){
                     reserve(max(maxLoad(2* hashes.length + 1), node_count+1));
@@ -3105,9 +3102,9 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                             _first = newnode;
                         }
                     }
-                    node.insertPrev(newnode);
+                    node.index!N.insertPrev(newnode);
                 }else if(node){
-                    node.insertNext(newnode);
+                    node.index!N.insertNext(newnode);
                 }else{
                     hashes[index] = newnode;
                     if (_first is null || index < hash(key(_first.value))%hashes.length){
@@ -3240,7 +3237,7 @@ struct MNode(ThisContainer, IndexedBy, Value){
                     alias L$N.Inner!(ThisContainer, typeof(this),Value,$N) M$N;
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
-                },  "$N", toStringNow!N) ~ 
+                },  "$N", N) ~ 
                 ForEachIndex!(N+1, L[1 .. $]).result;
         }else{
             enum result = "";
@@ -3289,7 +3286,7 @@ class MultiIndexContainer(Value, IndexedBy){
                         ThisNode* aY; 
                         bool bY = index!(Y)._DenyInsertion(node,aY);
                         if (bY) goto denied;
-                }, "Y",toStringNow!i)) ~ ForEachCheckInsert!(i+1, N).result;
+                }, "Y", i)) ~ ForEachCheckInsert!(i+1, N).result;
             }else enum result = ForEachCheckInsert!(i+1, N).result;
         }else enum result = "";
     }
@@ -3301,11 +3298,11 @@ class MultiIndexContainer(Value, IndexedBy){
                                 index!i._DenyInsertion(p,p);}))){
                     enum result = Replace!(q{
                         index!(Y)._Insert(node,aY);
-                    }, "Y",toStringNow!i) ~ ForEachDoInsert!(i+1,N).result;
+                    }, "Y", i) ~ ForEachDoInsert!(i+1,N).result;
                 }else{
                     enum result = Replace!(q{
                         index!(Y)._Insert(node);
-                    }, "Y",toStringNow!i) ~ ForEachDoInsert!(i+1,N).result;
+                    }, "Y", i) ~ ForEachDoInsert!(i+1,N).result;
                 }
             }else enum result = ForEachDoInsert!(i+1, N).result;
         }else enum result = "";
@@ -3327,7 +3324,7 @@ denied:
             static if(i != N){
                 enum result = Replace!(q{
                     index!(Y)._Remove(node);
-                }, "Y",toStringNow!i) ~ ForEachDoRemove!(i+1,N).result;
+                }, "Y", i) ~ ForEachDoRemove!(i+1,N).result;
             }else enum result = ForEachDoRemove!(i+1, N).result;
         }else enum result = "";
     }
@@ -3351,10 +3348,10 @@ denied:
             static if(is(typeof(index!i ._NodePosition((ThisNode*).init)))){
                 enum ante = Replace!(q{
                     auto pos$i = index!$i ._NodePosition(node);
-                }, "$i",toStringNow!i) ~ ForEachIndexPosition!(i+1).ante;
+                }, "$i", i) ~ ForEachIndexPosition!(i+1).ante;
                 enum post = Replace!(q{
                     if(!index!$i ._FixPosition(node, pos$i)) goto denied;
-                }, "$i", toStringNow!i) ~ ForEachIndexPosition!(i+1).post;
+                }, "$i", i) ~ ForEachIndexPosition!(i+1).post;
             }else{
                 enum ante = ForEachIndexPosition!(i+1).ante;
                 enum post = ForEachIndexPosition!(i+1).post;
@@ -3454,7 +3451,7 @@ denied:
                     Index$N get_index(size_t n)() if(n == $N){
                         return this.new Index$N();
                     }
-                },  "$N", Format!("%s",N)) ~ 
+                },  "$N", N) ~ 
                 ForEachIndex!(N+1, L[1 .. $]).result;
         }else{
             enum result = "";
