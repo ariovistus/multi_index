@@ -2703,7 +2703,9 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
         // node implementation 
         // could be singly linked, but that would make aux removal more 
         // difficult
-        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, N).NodeMixin NodeMixin;
+        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, N).NodeMixin 
+            NodeMixin;
+
         enum IndexCtorMixin = q{
             hashes.length = primes[0];
             load_factor = 0.80;
@@ -2840,11 +2842,13 @@ Reports whether a value exists in the collection such that eq(k, key(value)).
 Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
  */
-            bool opBinaryRight(string op)(KeyType k) if (op == "in")
-            {
-                ThisNode* node;
-                size_t index;
-                return _find(k, node,index);
+            static if(!isImplicitlyConvertible!(KeyType, const(Value))){
+                bool opBinaryRight(string op)(KeyType k) if (op == "in")
+                {
+                    ThisNode* node;
+                    size_t index;
+                    return _find(k, node,index);
+                }
             }
 
 /**
@@ -2928,7 +2932,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     return ListRange(null,null);
                 }
                 static if(!allowDuplicates){
-                    return ListRange(this,node, node.index!N.next);
+                    return ListRange(this,node, node);
                 }else{
                     ThisNode* node2 = node;
                     while(node2.index!N.next !is null && 
@@ -3165,7 +3169,7 @@ $(BIGOH n $(SUB r)) for this index
                     r.popFront();
                     _RemoveAll(node);
                 }
-                return Range(c, null, hashes.length);
+                return Range(this, null, hashes.length);
             }
 
 /** 
