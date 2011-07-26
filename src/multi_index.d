@@ -1070,23 +1070,23 @@ mixin template OrderedNodeMixin(size_t N){
 version(PtrHackery){
     size_t _p;
 
-    @property Node _parent(){
-        Node r = cast(Node) _p;
-        btr(&r,0);
-        return r;
-    }
     @property void _parent(Node p){
         Color c = color;
         _p = cast(size_t) p;
         color = c;
     }
-    @property Color color(){
-        return cast(Color) bt(&_p,0);
+    @property Node _parent(){
+        size_t r = _p;
+        btr(&r,0);
+        return cast(Node) r;
     }
 
     @property void color(Color c){
-        if(c) bts(&_p,0)
+        if(c) bts(&_p,0);
         else btr(&_p,0);
+    }
+    @property Color color(){
+        return cast(Color) bt(&_p,0);
     }
 }else{
     Node _parent;
