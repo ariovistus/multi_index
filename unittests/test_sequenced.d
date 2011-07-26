@@ -77,6 +77,7 @@ unittest{
     assert(array(c[]) == [1,5,223,-9,-10,-8,67]);
 
 }
+
 unittest{
     // sequenced, sequenced
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), Sequenced!())) C1;

@@ -1,6 +1,11 @@
 /**
 A port of Joaquin M Lopez Munoz' _multi_index library.
 
+compilation options: $(BR)
+<b>version=PtrHackery</b> - In boost::_multi_index, Munoz stores the color of a RB 
+Tree Node in the low bit of one of the pointers with the rationale that on 
+'many' architectures, pointers only point to even addresses.
+
 Source: something somewhere?
 Macros: 
 TEXTWITHCOMMAS = $0
@@ -27,10 +32,8 @@ becomes a pain, and may introduce inefficiencies in time or memory complexity.
 Into this use case steps multi_index. It allows the user to specify multiple
 <i>indeces</i> on the container elements, each of which provides interesting
 access functionality. A multi_index container will automatically keep all 
-indeces synchronized over any insertion, removal, or replacement operation 
-performed on any one index.  Each index must define how to perform auxiliary 
-insertion, removal, and replacement, 
-which may have equal or better time complexity than those exposed to the user.
+indeces synchronized over insertion, removal, or replacement operations 
+performed on any one index.  
 
 Each index will typically require ($(D N * ptrsize * k)) additional bytes of 
 memory, for some k < 4
@@ -48,9 +51,8 @@ $(TEXTWITHCOMMAS Usage:)
 -----
 alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), ...)) C;
 C c = new C;
-c.index!0 .insert(0); // access the index directly (operator overloads won't work here)
-c.index!0 .insert(1);
-auto i0 = c.get_index!0; // or via a helper class (recommended)
+auto i0 = c.get_index!0; // access index via a helper class 
+i0.insertFront([0,1]);
 assert(array(i0[]) == [0,1]); // assumes no index refused these elements
 i0.insertFront([3,4,5]);
 assert(array(i0[]) == [3,4,5,0,1]); // ditto
@@ -238,9 +240,6 @@ module multi_index;
  *  other indeces? 
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
- *  replace functionality - also, output ranges might be good for this?
- *  clear functionality
- *  op ~ 
  *  
  */
 
@@ -251,11 +250,15 @@ import std.algorithm: find, swap, copy, fill, max;
 import std.traits: isImplicitlyConvertible;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
-import std.typetuple: TypeTuple;
+import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf;
 import std.functional: unaryFun, binaryFun;
+version(PtrHackery){
+    import std.intrinsic: bt, bts, btr;
+}
 
 /// A doubly linked list index.
 template Sequenced(){
+    enum bool BenefitsFromSignals = false;
     // damn you, ddoc
     /// _
     template Inner(ThisContainer,ThisNode, Value, size_t N){
@@ -417,7 +420,7 @@ Complexity: $(BIGOH 1)
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */ 
             void front(const(Value) value){
-                _Replace(_front, value);
+                _Replace(_front, cast(Value) value);
             }
 
 
@@ -432,12 +435,15 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
              * Complexity: $(BIGOH r(n))
              */
             void back(const(Value) value){
-                _Replace(_back, value);
+                _Replace(_back, cast(Value) value);
+            }
+
+            void _ClearIndex(){
+                _front = _back = null;
             }
 
             void clear(){
-                // todo
-                assert (0);
+                _Clear();
             }
 
 /**
@@ -458,6 +464,22 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
                     ThisNode* node = r.source._back;
                 }
                 _Modify(node, mod);
+            }
+
+/**
+Replaces r.front with value
+Returns: whether replacement succeeded
+Complexity: ??
+*/
+            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            if(is(SomeRange == Range) || 
+                    is(SomeRange == typeof(retro(Range.init)))){
+                static if(is(SomeRange == Range)){
+                    ThisNode* node = r.node;
+                }else{
+                    ThisNode* node = r.source._back;
+                }
+                return _Replace(node, cast(Value) value);
             }
 
             bool _insertFront(ThisNode* node) nothrow
@@ -679,6 +701,7 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 
 /// A random access index.
 template RandomAccess(){
+    enum bool BenefitsFromSignals = false;
     /// _
     template Inner(ThisContainer,ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
@@ -830,7 +853,7 @@ Complexity: $(BIGOH 1)
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
             void front(const(Value) value){
-                _Replace(ra[0], value);
+                _Replace(ra[0], cast(Value) value);
             }
 
 /**
@@ -844,11 +867,16 @@ Complexity: $(BIGOH 1)
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
             void back(const(Value) value){
-                _Replace(ra[node_count-1], value);
+                _Replace(ra[node_count-1], cast(Value) value);
             }
-/// ??
+
+            void _ClearIndex(){
+                fill(ra, cast(ThisNode*) null);
+            }
+
+            /// _
             void clear(){
-                assert(0);
+                _Clear();
             }
 
 /**
@@ -867,7 +895,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
             const(Value) opIndexAssign(const(Value) value, size_t i){
                 enforce(i < length);
-                _Replace(ra[i], value);
+                _Replace(ra[i], cast(Value) value);
                 return ra[i].value;
             }
 
@@ -978,6 +1006,21 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
                 }
                 _Modify(node, mod);
             }
+/**
+Replaces r.front with value
+Returns: whether replacement succeeded
+Complexity: ??
+*/
+            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            if(is(SomeRange == Range) || 
+                    is(SomeRange == typeof(retro(Range.init)))){
+                static if(is(SomeRange == Range)){
+                    ThisNode* node = r.node;
+                }else{
+                    ThisNode* node = ra[r.source.e-1];
+                }
+                return _Replace(node, cast(Value) value);
+            }
 
 /**
 removes elements of r from this container.
@@ -1023,12 +1066,35 @@ mixin template OrderedNodeMixin(size_t N){
     alias typeof(this)* Node;
     Node _left;
     Node _right;
-    Node _parent;
 
+version(PtrHackery){
+    size_t _p;
+
+    @property Node _parent(){
+        Node r = cast(Node) _p;
+        btr(&r,0);
+        return r;
+    }
+    @property void _parent(Node p){
+        Color c = color;
+        _p = cast(size_t) p;
+        color = c;
+    }
+    @property Color color(){
+        return cast(Color) bt(&_p,0);
+    }
+
+    @property void color(Color c){
+        if(c) bts(&_p,0)
+        else btr(&_p,0);
+    }
+}else{
+    Node _parent;
     /**
      * The color of the node.
      */
     Color color;
+}
 
     /**
      * Get the left child
@@ -1826,6 +1892,10 @@ Complexity: $(BIGOH 1).
             }
         }
 
+    void _ClearIndex(){
+        _end.index!N._left = null;
+    }
+
     /**
      * Removes all elements from the container.
      *
@@ -1833,8 +1903,7 @@ Complexity: $(BIGOH 1).
      */
     void clear()
     {
-        assert(0);
-        // todo
+        _Clear();
     }
 
     static if(!allowDuplicates){
@@ -1864,16 +1933,25 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
         Node node = r.node;
         _Modify(node, mod);
     }
+/**
+Replaces r.front with value
+Returns: whether replacement succeeded
+Complexity: ??
+*/
+    bool replace(Range r, const(Value) value) {
+        ThisNode* node = r.node;
+        return _Replace(node, cast(Value) value);
+    }
 
     KeyType _NodePosition(ThisNode* node){
         return key(node.value);
     }
 
-    bool _FixPosition(ThisNode* node, KeyType oldPosition)
-        out(r){
-            version(RBDoChecks)
-                check();
-        }body{
+    // cursor = null -> no fixup needed
+    // cursor != null -> fixup needed
+    bool _PositionFixable(ThisNode* node, KeyType oldPosition, 
+            out ThisNode* cursor){
+        cursor = null;
         // case 1: key hasn't changed
         auto newPosition = key(node.value);
         if(!_less(newPosition, oldPosition) && 
@@ -1888,27 +1966,38 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 
         // case 3: key has changed, position has changed
         static if(allowDuplicates){
-            _Remove(node);
-            node.index!N._parent = 
-                node.index!N._left = 
-                node.index!N._right = null;
-            node.index!N.color = Color.Red;
-            _Insert(node);
+            cursor = node;
             return true;
         }else{
-            Node cursor;
             bool found = _find2(newPosition, cursor);
-            if(found && cursor !is node) return false;
+            if(cursor is node) writeln("cursor is node");
+            return !found || cursor is node;
+        }
+    }
+
+    void _FixPosition(ThisNode* node, KeyType oldPosition, ThisNode* cursor)
+        out{
+            version(RBDoChecks)
+                check();
+        }body{
+        static if(allowDuplicates){
+            if(cursor){
+                _Remove(node);
+                node.index!N._parent = 
+                    node.index!N._left = 
+                    node.index!N._right = null;
+                node.index!N.color = Color.Red;
+                _Insert(node);
+            }
+        }else{
+            if(!cursor) return;
             _Remove(node);
             node.index!N._parent = 
                 node.index!N._left = 
                 node.index!N._right = null;
             node.index!N.color = Color.Red;
             if(cursor is node) _add(node);
-            else{
-                _Insert(node, cursor);
-            }
-            return true;
+            else _Insert(node, cursor);
         }
     }
 
@@ -2317,6 +2406,9 @@ Complexity: $(BIGOH log(n))
 /// A red black tree index
 template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Compare = "a<b"){
+
+    enum bool BenefitsFromSignals = true;
+
     template Inner(ThisContainer, ThisNode, Value, size_t N){
         alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
@@ -2343,6 +2435,9 @@ template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
 
 /// a max heap index
 template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
+
+    enum bool BenefitsFromSignals = true;
+
     /// _
     template Inner(ThisContainer, ThisNode, Value, size_t N){
         alias TypeTuple!() NodeTuple;
@@ -2495,11 +2590,15 @@ Complexity: $(BIGOH 1)
             const(Value) back(){
                 return _heap[node_count-1].value;
             }
+
+            void _ClearIndex(){
+                fill(_heap, cast(ThisNode*) null);
+            }
 /**
-  ??
+??
 */
             void clear(){
-                assert(0);
+                _Clear();
             }
 
 /**
@@ -2516,16 +2615,31 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
                     ThisNode* node = r.node;
                     _Modify(node, mod);
                 }
+/**
+Replaces r.front with value
+Returns: whether replacement succeeded
+Complexity: ??
+*/
+            bool replace(Range r, const(Value) value)
+            {
+                ThisNode* node = r.node;
+                return _Replace(node, cast(Value) value);
+            }
 
             KeyType _NodePosition(ThisNode* node){
                 return key(node.value);
             }
 
-            bool _FixPosition(ThisNode* node, KeyType oldPosition){
+            bool _PositionFixable(ThisNode* node, KeyType oldPosition, 
+                    out ThisNode* cursor){
+                return true;
+            }
+
+            void _FixPosition(ThisNode* node, KeyType oldPosition, 
+                    ThisNode* cursor){
                 auto newPosition = key(node.value);
                 // sift will take O(1) if key hasn't changed
                 sift(node.index!N._index);
-                return true;
             }
 
 /**
@@ -2643,7 +2757,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
     }
 }
 
-// thieved from boost::muLti_index::detail::bucket_array.
+// thieved from boost::multi_index::detail::bucket_array.
 static if(size_t.sizeof == 4){
     immutable size_t[] primes = [
         53u, 97u, 193u, 389u, 769u,
@@ -2682,6 +2796,9 @@ static if(size_t.sizeof == 4){
 /// Eq(key1, key2) determines equality of key1, key2
 template Hashed(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){
+
+    enum bool BenefitsFromSignals = true;
+
     /// _
     template Inner(ThisContainer, ThisNode, Value, size_t N){
         alias unaryFun!KeyFromValue key;
@@ -2787,8 +2904,15 @@ Complexity: $(BIGOH 1)
                 return _first.value;
             }
     
+            void _ClearIndex(){
+                _first = null;
+                fill(hashes, cast(ThisNode*)null);
+            }
+/**
+??
+*/
             void clear(){
-                assert(0);
+                _Clear();
             }
 
 /**
@@ -2894,28 +3018,52 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good
                 ThisNode* node = r.node;
                 _Modify(node, mod);
             }
+/**
+Replaces r.front with value
+Returns: whether replacement succeeded
+Complexity: ??
+*/
+            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            if(is(SomeRange == Range) || is(SomeRange == ListRange)){
+                ThisNode* node = r.node;
+                return _Replace(node, cast(Value) value);
+            }
 
             KeyType _NodePosition(ThisNode* node){
                 return key(node.value);
             }
 
-            bool _FixPosition(ThisNode* node, KeyType oldPosition){
+            // cursor = null -> no fixup necessary or fixup to start of chain
+            // cursor != null -> fixup necessary
+            bool _PositionFixable(ThisNode* node, KeyType oldPosition, 
+                    out ThisNode* cursor){
+                cursor = null;
                 auto newPosition = key(node.value);
                 if(eq(newPosition, oldPosition)) return true;
                 static if(allowDuplicates){
-                    _Remove(node);
-                    _Insert(node);
+                    cursor = node;
                     return true;
                 }else{
                     ThisNode* n;
                     size_t index;
-                    if(_find(newPosition, n, index)){
-                        return false;
-                    }else{
+                    return !(_find(newPosition, cursor, index));
+                }
+
+            }
+
+            void _FixPosition(ThisNode* node, KeyType oldPosition,
+                    ThisNode* cursor){
+                auto newPosition = key(node.value);
+                if(eq(newPosition, oldPosition)) return;
+                static if(allowDuplicates){
+                    if(cursor){
                         _Remove(node);
-                        _Insert(node, n);
-                        return true;
+                        _Insert(node);
                     }
+                }else{
+                    if(eq(oldPosition, key(node.value))) return;
+                    _Remove(node);
+                    _Insert(node, cursor);
                 }
             }
 
@@ -3206,6 +3354,204 @@ struct IndexedBy(L...)
     alias L List;
 }
 
+template GetMixinAlias(valueSignal){
+    alias valueSignal.MixinAlias GetMixinAlias;
+}
+/** 
+Specifies how to hook up value signals to indeces.
+
+A value type Value is a signal whenever Value supports the signal 
+interface, ie $(BR)
+
+value.connect(void delegate() slot) $(BR)
+value.disconnect(void delegate() slot)
+
+and has the semantics that whenever value changes in a way that will cause 
+its position in index to change or become invalid, a call is made to slot.
+The index will respond by fixing the position, or if that is not possible,
+by throwing an exception.
+
+A value may contain multiple signals within different mixin aliases. If this
+is the case, the interface is
+
+value.mixinAlias.connect(void delegate() slot) $(BR)
+value.mixinAlias.disconnect(void delegate() slot)
+
+where mixinAlias is passed in as a string to each element of L.
+
+Arguments must be instantiations of ValueSignal.
+
+Signals to single indeces can be specified by ValueSignal!(index[, mixinAlias])
+
+Signals to all indeces can be specified by ValueSignal!("*"[, mixinAlias])
+
+A signal can be shared by multiple indeces; however do not associate a signal 
+to the same index more than once.
+*/
+
+struct SignalOnChange(L...) {
+    struct Inner(IndexedBy){
+        enum N = IndexedBy.List.length;
+        alias L List;
+
+        template OU(T){
+            static T[] orderedUniqueInsert(T[] x, T value){
+                size_t i;
+                while(i < x.length && x[i] < value) i++;
+                if(i < x.length && x[i] == value) return x;
+                T[] ret = new T[](x.length+1);
+                ret[0 .. i] = x[0 .. i];
+                ret[i] = value;
+                ret[i+1 .. $] = x[i .. $];
+                return ret;
+            }
+            static T[] TypeList2SortedArray(L...)(){
+                alias L List;
+                T[] ret = [];
+                foreach(T l; List){
+                    ret = orderedUniqueInsert(ret, l);
+                }
+                return ret;
+            }
+        }
+
+        enum string[] AllSignals = OU!(string).TypeList2SortedArray!(
+                NoDuplicates!(staticMap!(GetMixinAlias, List)))(); 
+
+        template FindIndeces(string mixinAlias, size_t i, indeces...)
+        if(indeces.length == 1 && is(typeof(indeces[0]) == size_t[])){
+            static if(i < List.length){
+                static if(List[i].MixinAlias == mixinAlias){
+                    static if(__traits(compiles,List[i].Index)){
+                        static if(
+                            IndexedBy.List[List[i].Index].BenefitsFromSignals){
+                            enum size_t[] result = 
+                                FindIndeces!(mixinAlias, i+1, 
+                                        OU!(size_t).orderedUniqueInsert(
+                                            indeces[0], List[i].Index)).result;
+                        }else{
+                            enum size_t[] result = 
+                                FindIndeces!(mixinAlias, i+1, indeces[0]).result;
+                        }
+                    }else{
+                        static assert(__traits(compiles,List[i].Tag));
+                        static assert(false, 
+                                "implement me (when you implement tagging)");
+                    }
+                }else{
+                    enum size_t[] result = 
+                        FindIndeces!(mixinAlias, i+1, indeces[0]).result;
+                }
+            }else{
+                enum size_t[] result = indeces[0];
+            }
+        }
+
+        template GenSets(size_t i, MI...){
+            static if (i < AllSignals.length){
+                enum mixinAlias = AllSignals[i];
+                enum indeces = FindIndeces!(mixinAlias,0,cast(size_t[])[]).result;
+                template InsertIndeces(size_t j){
+                    static if(j < MI.length){
+                        static if(MI[j].Indeces == indeces){
+                            alias TypeTuple!(MI[0 .. j], 
+                                    Mixin2Indeces!(
+                                        OU!(string).orderedUniqueInsert(
+                                            MI[j].MixinAliases,mixinAlias),
+                                        indeces
+                                        ), 
+                                    MI[j+1 .. $]) InsertIndeces;
+                        }else{
+                            alias InsertIndeces!(i+1) InsertIndeces;
+                        }
+                    }else{
+                        alias TypeTuple!(MI, Mixin2Indeces!([mixinAlias], 
+                                    indeces)) InsertIndeces;
+                    }
+                }
+
+                static if(indeces.length > 0){
+                    alias InsertIndeces!(0) MI2;
+                    alias GenSets!(i+1, MI2).result result;
+                }else{
+                    alias GenSets!(i+1, MI).result result;
+                }
+            }else{
+                alias MI result;
+            }
+        }
+
+        // map { set of mixin aliases -> set of indeces }
+        // since we don't have maps or sets in ct (boo),
+        // really this is a list of ((list of mixin aliases), (list of indeces))
+        // with each inner list sorted ascending.
+        //
+        // what's the background?
+        // we want to generate no more than M slots for this index/signal
+        // spec, where M is the number of distinct signals (mixin aliases) 
+        // passed in. This should minimize the amount of additional memory
+        // that each value has to keep track of.
+        // 
+        // We also want to know when different signals share the same index
+        // set, so we don't have to generate redundant slots.
+        // so we generate this mapping, which should help.
+        //
+        // Requires: In the map's key set - a set of sets of mixin aliases -
+        //  each mixin appears in exactly one set. (it is a true set)
+        //  The map's value set - a set of sets of indeces - is a true set,
+        //  each index set is unique
+        //
+        // Then: for each entry in the map (K,V), we generate a slot function W
+        //  inside our node. W gets connected/disconnected to/from each of 
+        //  the signals in K. W notifies each of the indeces in V.
+
+        alias GenSets!(0).result Mixin2Index;
+
+
+        template _GetIndecesForSignal(string signal, size_t i){
+            static if(i < N){
+                static if(staticIndexOf!(signal, GetMixinAliases!(List[i])) 
+                        != -1){
+                    alias TypeTuple!(i,_GetIndecesForSignal!(signal,i+1)) 
+                        _GetIndecesForSignal;
+                }else{
+                    alias _GetIndecesForSignal!(signal,i+1) 
+                        _GetIndecesForSignal;
+                }
+            }else{
+                alias TypeTuple!() _GetIndecesForSignal;
+            }
+        }
+
+        template GetIndecesForSignal(string signal){
+            alias _GetIndecesForSignal!(signal, 0) GetIndecesForSignal;
+        }
+    }
+}
+
+/// _
+struct ValueSignal(size_t index, string mixinAlias = "")
+{
+    enum size_t Index = index;
+    enum MixinAlias = mixinAlias;
+}
+
+/// _
+struct ValueSignal(string tag, string mixinAlias = "")
+{
+    enum Tag = tag;
+    enum MixinAlias = mixinAlias;
+}
+
+struct Mixin2Indeces(stuff...)
+// wish we could pass arrays directly (cough)
+if(stuff.length == 2 && is(typeof(stuff[0]) == string[]) && 
+        is(typeof(stuff[1]) == size_t[])){
+    enum string[] MixinAliases = stuff[0];
+    enum size_t[] Indeces = stuff[1];
+}
+
+
 /++
 A multi_index node. Holds the value of a single element,
 plus per-node headers of each index, if any. 
@@ -3224,8 +3570,26 @@ n2.index!1 .next = n1;
 n1.index!2 .left = n2;
 ----
 +/
-struct MNode(ThisContainer, IndexedBy, Value){
+struct MNode(ThisContainer, IndexedBy, Signals, Value){
     Value value;
+
+    static if(Signals.AllSignals.length > 0){
+        // notifications need to go somewhere
+        ThisContainer container;
+
+        /// generate slots
+        template ForEachSignal(size_t i, size_t j){
+            static if(i < Signals.Mixin2Index.length){
+                alias Signals.Mixin2Index[i] Mixin2Index;
+                enum stuff = Replace!(q{
+                    void slot$i(){
+                        container._NotifyChange$i(&this);
+                    }
+                }, "$i", i);
+            }else{
+            }
+        }
+    }
 
     template ForEachIndex(size_t N,L...){
         static if(L.length > 0){
@@ -3251,16 +3615,21 @@ struct MNode(ThisContainer, IndexedBy, Value){
 /++ 
 The container
 +/
-class MultiIndexContainer(Value, IndexedBy){
-    alias MNode!(typeof(this), IndexedBy,Value) ThisNode;
+class MultiIndexContainer(Value, IndexedBy, Signals = SignalOnChange!()){
+
+    alias Signals.Inner!(IndexedBy) NormSignals;
+    alias MNode!(typeof(this), IndexedBy,NormSignals,Value) ThisNode;
 
     size_t node_count;
 
 
     template ForEachCtorMixin(size_t i){
         static if(i < IndexedBy.List.length){
-            static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), ThisNode,const(Value),i).IndexCtorMixin))){
-                enum result =  IndexedBy.List[i].Inner!(typeof(this), ThisNode,const(Value),i).IndexCtorMixin ~ ForEachCtorMixin!(i+1).result;
+            static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), 
+                                ThisNode,const(Value),i).IndexCtorMixin))){
+                enum result =  IndexedBy.List[i].Inner!(typeof(this), 
+                        ThisNode,const(Value),i).IndexCtorMixin ~ 
+                    ForEachCtorMixin!(i+1).result;
             }else enum result = ForEachCtorMixin!(i+1).result;
         }else enum result = "";
     }
@@ -3350,27 +3719,36 @@ denied:
                     auto pos$i = index!$i ._NodePosition(node);
                 }, "$i", i) ~ ForEachIndexPosition!(i+1).ante;
                 enum post = Replace!(q{
-                    if(!index!$i ._FixPosition(node, pos$i)) goto denied;
+                    ThisNode* node$i;
+                    if(!index!$i ._PositionFixable(node, pos$i, node$i)) 
+                        goto denied;
                 }, "$i", i) ~ ForEachIndexPosition!(i+1).post;
+                enum postpost = Replace!(q{
+                    index!$i ._FixPosition(node, pos$i, node$i);
+                }, "$i", i) ~ ForEachIndexPosition!(i+1).postpost;
             }else{
                 enum ante = ForEachIndexPosition!(i+1).ante;
                 enum post = ForEachIndexPosition!(i+1).post;
+                enum postpost = ForEachIndexPosition!(i+1).postpost;
             }
         }else{
             enum ante = "";
             enum post = "";
+            enum postpost = "";
         }
     }
 
 
-    void _Replace(ThisNode* node, Value value){
+    bool _Replace(ThisNode* node, Value value){
         mixin(ForEachIndexPosition!0 .ante);
         Value old = node.value;
         node.value = value;
         mixin(ForEachIndexPosition!0 .post);
-        return;
+        mixin(ForEachIndexPosition!0 .postpost);
+        return true;
 denied:
         node.value = old;
+        return false;
     }
 
 /**
@@ -3384,9 +3762,29 @@ Complexity: $(BIGOH m(n))
         mixin(ForEachIndexPosition!0 .ante);
         mod(node.value);
         mixin(ForEachIndexPosition!0 .post);
+        mixin(ForEachIndexPosition!0 .postpost);
         return;
 denied:
         _RemoveAll(node);
+    }
+
+    template ForEachClear(size_t i){
+        static if(i < IndexedBy.List.length){
+            enum string result = Replace!(q{
+                index!$i ._ClearIndex();
+            }, "$i", i) ~ ForEachClear!(i+1).result;
+        }else enum string result = "";
+    }
+
+    void _Clear(){
+        auto r = index!0 .opSlice();
+        while(!r.empty){
+            ThisNode* node = r.node;
+            r.popFront();
+            dealloc(node);
+        }
+        mixin(ForEachClear!0 .result);
+        node_count = 0;
     }
 
     template ForEachAlias(size_t N,size_t index, alias X){
@@ -3473,62 +3871,39 @@ int[] arr(Range)(Range r){
     }
     return result;
 }
+
+struct S1{
+    string _s;
+    int _i;
+    void delegate() slot = null;
+
+    @property string s()const{ return _s;}
+    @property void s(string s_){ _s = s_; emit(); }
+
+    @property int i()const{ return _i;}
+    @property void i(int i_){ _i = i_; }
+
+    void emit(){
+        if (slot) slot();
+    }
+
+    void connect(void delegate() slot){ this.slot = slot; }
+    void disconnect(void delegate() slot){ 
+        if(this.slot is slot) this.slot = null; 
+    }
+
+    string toString()const{
+        return format("%s: %s", s, i);
+    }
+}
+
 version(TestMultiIndex)
 void main(){
-    /+
-    alias MNode!(IndexedBy!(
-                Sequenced!(), 
-                OrderedUnique!(),
-                ),int) Node;
-    Node* n1 = new Node();
-    Node* n2 = new Node();
-    enum R = 1;
-    n1.index!0 .next = n2;
-    n1.index!1 .left = n2;
-    +/
-    alias MultiIndexContainer!(int, 
-            IndexedBy!(Sequenced!())) C;
-            /+
-            IndexedBy!(Sequenced!(), OrderedNonUnique!(), 
-                RandomAccess!(), Heap!(), HashedNonUnique!())) C;
-    +/
+    alias MultiIndexContainer!(S1, 
+            IndexedBy!(Sequenced!(),
+                OrderedUnique!("a.s")),
+            SignalOnChange!(ValueSignal!(1))) C;
 
     C i = new C;
-    /+
-    i.index!(1).insert(S(1,1));
-    i.index!(1).insert(S(0,2));
-    i.index!(1).insert(S(-1,2));
-    i.index!(1).insert(S(3,3));
-    i.index!(1).insert(S(2,40));
-    i.index!(1).insert(S(1,5));
-    writeln(array(i.index!(0).opSlice()));
-    writeln(array(i.index!(1).opSlice()));
-    i.index!(1).removeKey(3);
-    writeln(array(i.index!(0).opSlice()));
-    writeln(array(i.index!(1).opSlice()));
-    +/
-    auto c = i.get_index!0;
-    struct J{}
-    //c.insert("a");
-    i.insert(5);
-    i.index!(0).insert(5);
-    i.index!(0).insert(5);
-    i.index!(0).insert(4);
-    i.index!(0).insert(3);
-    i.index!(0).insert(1);
-    i.index!(0).insert(9);
-    i.index!(0).insert(7);
-    i.index!(0).insert(8);
-    i.index!(0).insert(52);
-    writeln(i.index!(2).opIndex(3));
-    writeln("sequenced: ", array(i.index!(0).opSlice()));
-    writeln("ordered: ",array(i.index!(1).opSlice()));
-    writeln("random access: ",arr(i.index!(2).opSlice()));
-    writeln("heap: ",arr(i.index!(3).opSlice()));
-    writeln("hash: ",array(i.index!(4).opSlice()));
-    //pragma(msg, Sequenced!().Inner!(N,int,0).Index!().IndexMixin);
-        /+
-    n1.next!0 = null;
-    +/
 
 }
