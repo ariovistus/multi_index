@@ -243,6 +243,8 @@ module multi_index;
  *  
  */
 
+version = BucketHackery;
+
 import std.array;
 import std.range;
 import std.exception: enforce;
@@ -1816,6 +1818,24 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
         return false;
     }
 
+    private bool _find2At(KeyType k, Node cur, out Node par)
+    {
+        par = null;
+        while(cur)
+        {
+            auto ck = key(cur.value);
+            par = cur;
+            if(_less(ck, k)){
+                cur = cur.index!N.right;
+            }else if(_less(k, ck)){
+                cur = cur.index!N.left;
+            }else{
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Check if any elements exist in the container.  Returns $(D true) if at least
      * one element exists.
@@ -1960,7 +1980,8 @@ Complexity: ??
         Node prev = node.index!N.prev;
         
         // case 2: key has changed, but relative position hasn't
-        bool outOfBounds = (next && !_less(newPosition, key(next.value))) ||
+        bool outOfBounds = (next && next != _end &&
+                !_less(newPosition, key(next.value))) ||
             prev && !_less(key(prev.value), newPosition);
         if (!outOfBounds) return true;
 
@@ -1970,8 +1991,25 @@ Complexity: ??
             return true;
         }else{
             bool found = _find2(newPosition, cursor);
-            if(cursor is node) writeln("cursor is node");
-            return !found || cursor is node;
+            if(cursor is node){
+                // node's old value is in path to node's new value
+                if(_less(newPosition, oldPosition)){
+                    if(cursor.index!N._left){
+                        found = _find2At(newPosition, 
+                                cursor.index!N._left, cursor);
+                    }else{
+                        found = false;
+                    }
+                }else{
+                    if(cursor.index!N._right){
+                        found = _find2At(newPosition, 
+                                cursor.index!N._right, cursor);
+                    }else{
+                        found = false;
+                    }
+                }
+            }
+            return !found;
         }
     }
 
@@ -1996,8 +2034,47 @@ Complexity: ??
                 node.index!N._left = 
                 node.index!N._right = null;
             node.index!N.color = Color.Red;
-            if(cursor is node) _add(node);
-            else _Insert(node, cursor);
+            _Insert(node, cursor);
+        }
+    }
+
+    // n's value has changed and its position might be invalid.
+    // remove n if it violates an invariant.
+    // returns: true iff n's validity has been restored
+    bool _NotifyChange(Node node){
+        auto newPosition = key(node.value);
+        Node next = node.index!N.next;
+        Node prev = node.index!N.prev;
+        
+        // case 1: key has changed, but relative position hasn't
+        bool outOfBounds = (next && next != _end && 
+                !_less(newPosition, key(next.value))) ||
+            prev && !_less(key(prev.value), newPosition);
+        if (!outOfBounds) return true;
+
+        // case 2: key has changed, position has changed
+        static if(allowDuplicates){
+            _Remove(node);
+            node.index!N._parent = 
+                node.index!N._left = 
+                node.index!N._right = null;
+            node.index!N.color = Color.Red;
+            _Insert(node);
+            return true;
+        }else{
+            Node cursor;
+            _Remove(node);
+            bool found = _find2(newPosition, cursor);
+            if(found){
+                _RemoveAllBut!N(node);
+                return false;
+            }
+            node.index!N._parent = 
+                node.index!N._left = 
+                node.index!N._right = null;
+            node.index!N.color = Color.Red;
+            _Insert(node, cursor);
+            return true;
         }
     }
 
@@ -2637,9 +2714,14 @@ Complexity: ??
 
             void _FixPosition(ThisNode* node, KeyType oldPosition, 
                     ThisNode* cursor){
-                auto newPosition = key(node.value);
                 // sift will take O(1) if key hasn't changed
                 sift(node.index!N._index);
+            }
+
+            bool _NotifyChange(ThisNode* node){
+                // sift will take O(1) if key hasn't changed
+                sift(node.index!N._index);
+                return true;
             }
 
 /**
@@ -2839,6 +2921,59 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
             ThisNode*[] hashes;
             ThisNode* _first;
             double load_factor;
+
+            bool isFirst(ThisNode* n){
+                version(BucketHackery){
+                    size_t ix = cast(size_t) n.index!N.prev;
+                    return ix < hashes.length && hashes[ix] == n;
+                }else{
+                    return n.index!N.prev is null;
+                }
+            }
+
+            // sets n as the first in bucket list at index
+            void setFirst(ThisNode* n, size_t index){
+                version(BucketHackery){
+                    n.index!N.prev = cast(ThisNode*) index;
+                    size_t findex = !_first?-1:
+                        cast(size_t) _first.index!N.prev;
+                }else{
+                    size_t findex = !_first?-1:
+                        hash(key(_first.value))%hashes.length;
+                }
+                if(findex >= index) _first = n;
+                if(hashes[index] && hashes[index] != n){
+                    n.index!N.insertNext(hashes[index]);
+                }
+                hashes[index] = n;
+            }
+
+            void removeFirst(ThisNode* n){
+                version(BucketHackery){
+                    size_t index = cast(size_t) n.index!N.prev;
+                }else{
+                    size_t index = hash(key(n.value))%hashes.length;
+                }
+                auto nxt = n.index!N.next;
+                hashes[index] = nxt;
+                if (nxt){
+                    version(BucketHackery){
+                        nxt.index!N.prev = cast(ThisNode*) index;
+                        n.index!N.next = null;
+                        n.index!N.prev = null;
+                    }else{
+                        nxt.index!N.removePrev();
+                    }
+                    if(_first == n){
+                        _first = nxt;
+                    }
+                }else if(_first == n){
+                    while(index < hashes.length && !hashes[index]){
+                        index++;
+                    }
+                    if(index < hashes.length) _first = hashes[index];
+                }
+            }
 
             /// the primary range for this index, which embodies a forward 
             /// range. iteration has time complexity O(n) 
@@ -3067,6 +3202,43 @@ Complexity: ??
                 }
             }
 
+            bool _NotifyChange(ThisNode* node){
+                size_t index;
+                if(isFirst(node)){
+                    version(BucketHackery){
+                        index = cast(size_t) node.index!N.prev;
+                    }else{
+                        static assert(0,"signals not implemented for Hashed "
+                                "indeces without version=BucketHackery");
+                    }
+                }else{
+                    index = hash(key(node.index!N.prev.value))%hashes.length;
+                }
+
+                size_t newindex = hash(key(node.value))%hashes.length;
+                if(index != newindex){
+                    ThisNode* cursor;
+                    _Remove(node);
+                    if(_find(key(node.value), cursor, newindex)){
+                        static if(!allowDuplicates){
+                            _RemoveAllBut!N(node);
+                            return false;
+                        }
+                        if(isFirst(cursor)){
+                            setFirst(node, index);
+                        }else{
+                            cursor.index!N.insertPrev(node);
+                        }
+                    }else if(cursor){
+                        cursor.index!N.insertNext(node);
+                    }else{
+                        setFirst(node, index);
+                    }
+                    return true;
+                }
+                return true;
+            }
+
 
 /**
 Returns a range of all elements with eq(key(elem), k). 
@@ -3096,22 +3268,15 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     ThisNode* cursor;
                     size_t index;
                     if(_find(key(n.value), cursor, index)){
-                        if(cursor.index!N.prev is null){
-                            hashes[index] = n;
+                        if(isFirst(cursor)){
+                            setFirst(n, index);
+                        }else{
+                            cursor.index!N.insertPrev(n);
                         }
-                        cursor.index!N.insertPrev(n);
-                        size_t findex = hash(key(_first.value))%hashes.length;
-                        if(findex >= index) _first = n;
                     }else if(cursor){
                         cursor.index!N.insertNext(n);
                     }else{
-                        hashes[index] = n;
-                        if(!_first) n = _first;
-                        else{
-                            size_t findex = 
-                                hash(key(_first.value))%hashes.length;
-                            if(findex > index) _first = n;
-                        }
+                        setFirst(n, index);
                     }
                 }
             }else{
@@ -3125,35 +3290,16 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     }else{
                         size_t index = hash(key(n.value))%hashes.length;
                         assert ( !hashes[index] );
-                        hashes[index] = n;
-                        if(!_first) _first = n;
-                        else{
-                            size_t findex = 
-                                hash(key(_first.value))%hashes.length;
-                            if(findex >= index) _first = n;
-                        }
+                        setFirst(n, index);
                     }
                 }
             }
 
             void _Remove(ThisNode* n){
-                if(n.index!N.prev){
-                    n.index!N.prev.index!N.removeNext();
+                if(isFirst(n)){
+                    removeFirst(n);
                 }else{
-                    size_t index = hash(key(n.value))%hashes.length;
-                    auto nxt = n.index!N.next;
-                    hashes[index] = nxt;
-                    if (nxt){
-                        nxt.index!N.removePrev();
-                        if(_first == n){
-                            _first = nxt;
-                        }
-                    }else if(_first == n){
-                        while(index < hashes.length && !hashes[index]){
-                            index++;
-                        }
-                        if(index < hashes.length) _first = hashes[index];
-                    }
+                    n.index!N.prev.index!N.removeNext();
                 }
             }
 
@@ -3191,7 +3337,11 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                         node2 = r.node;
                         r.popFront();
                     }
-                    node.index!N.prev = null;
+                    version(BucketHackery){
+                        node.index!N.prev = cast(ThisNode*)index;
+                    }else{
+                        node.index!N.prev = null;
+                    }
                     node2.index!N.next = null;
                     if(!newhashes[index]){
                         newhashes[index] = node;
@@ -3244,20 +3394,15 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                 }
                 if(found){
                     // meh, lets not walk to the end of equal range
-                    if (node.index!N.prev is null){
-                        hashes[index] = newnode;
-                        if (index < hash(key(_first.value))%hashes.length){
-                            _first = newnode;
-                        }
+                    if (isFirst(node)){
+                        setFirst(newnode,index);
+                    }else{
+                        node.index!N.insertPrev(newnode);
                     }
-                    node.index!N.insertPrev(newnode);
                 }else if(node){
                     node.index!N.insertNext(newnode);
                 }else{
-                    hashes[index] = newnode;
-                    if (_first is null || index < hash(key(_first.value))%hashes.length){
-                        _first = newnode;
-                    }
+                    setFirst(newnode,index);
                 }
                 return 1;
             }
@@ -3357,6 +3502,7 @@ struct IndexedBy(L...)
 template GetMixinAlias(valueSignal){
     alias valueSignal.MixinAlias GetMixinAlias;
 }
+
 /** 
 Specifies how to hook up value signals to indeces.
 
@@ -3415,6 +3561,16 @@ struct SignalOnChange(L...) {
             }
         }
 
+        template GetIndex(valueSignal){
+            static if(__traits(compiles,valueSignal.Index)){
+                enum GetIndex = valueSignal.Index;
+            }else{
+                static assert(__traits(compiles,List[i].Tag));
+                static assert(false, 
+                        "implement me (when you implement tagging)");
+            }
+        }
+
         enum string[] AllSignals = OU!(string).TypeList2SortedArray!(
                 NoDuplicates!(staticMap!(GetMixinAlias, List)))(); 
 
@@ -3422,21 +3578,15 @@ struct SignalOnChange(L...) {
         if(indeces.length == 1 && is(typeof(indeces[0]) == size_t[])){
             static if(i < List.length){
                 static if(List[i].MixinAlias == mixinAlias){
-                    static if(__traits(compiles,List[i].Index)){
-                        static if(
-                            IndexedBy.List[List[i].Index].BenefitsFromSignals){
-                            enum size_t[] result = 
-                                FindIndeces!(mixinAlias, i+1, 
-                                        OU!(size_t).orderedUniqueInsert(
-                                            indeces[0], List[i].Index)).result;
-                        }else{
-                            enum size_t[] result = 
-                                FindIndeces!(mixinAlias, i+1, indeces[0]).result;
-                        }
+                    enum index = GetIndex!(List[i]);
+                    static if(IndexedBy.List[index].BenefitsFromSignals){
+                        enum size_t[] result = 
+                            FindIndeces!(mixinAlias, i+1, 
+                                    OU!(size_t).orderedUniqueInsert(
+                                        indeces[0], index)).result;
                     }else{
-                        static assert(__traits(compiles,List[i].Tag));
-                        static assert(false, 
-                                "implement me (when you implement tagging)");
+                        enum size_t[] result = 
+                            FindIndeces!(mixinAlias, i+1, indeces[0]).result;
                     }
                 }else{
                     enum size_t[] result = 
@@ -3578,18 +3728,35 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
         ThisContainer container;
 
         /// generate slots
-        template ForEachSignal(size_t i, size_t j){
+        template ForEachSignal(size_t i){
             static if(i < Signals.Mixin2Index.length){
                 alias Signals.Mixin2Index[i] Mixin2Index;
+
+                template ForEachIndex2(size_t j){
+                    static if(j < Mixin2Index.Indeces.length){
+                        enum result = Replace!(q{
+                            if(!container.index!($i)._NotifyChange(&this))
+                                goto denied;
+                        }, "$i", j) ~ ForEachIndex2!(j+1).result;
+                    }else{
+                        enum result = "";
+                    }
+                }
                 enum stuff = Replace!(q{
                     void slot$i(){
-                        container._NotifyChange$i(&this);
+                        $x
+                        return;
+                        denied: enforce(false, "todo: put a useful message in here");
                     }
-                }, "$i", i);
+                }, "$i", i, "$x", ForEachIndex2!(0).result);
             }else{
+                enum stuff = "";
             }
         }
+
+        mixin(ForEachSlot!(0).stuff);
     }
+
 
     template ForEachIndex(size_t N,L...){
         static if(L.length > 0){
