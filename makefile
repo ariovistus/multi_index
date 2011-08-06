@@ -2,6 +2,7 @@ all: topo test_heap test_sequenced test_ra test_ordered test_hashed
 	
 clean: 
 	rm topo test_heap test_sequenced test_ra test_ordered test_hashed
+	rm *.o
 
 topo: topo.d multi_index.d replace.d
 	dmd -gc -oftopo topo.d multi_index.d replace.d

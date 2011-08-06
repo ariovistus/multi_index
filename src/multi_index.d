@@ -47,20 +47,6 @@ $(TR $(TDNW $(D Sequenced)) $(TD Provides a doubly linked list view - exposes
 fast access to the front and back of the index.  Default insertion inserts to 
 the back of the index $(BR)
 
-$(TEXTWITHCOMMAS Usage:)
------
-alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), ...)) C;
-C c = new C;
-auto i0 = c.get_index!0; // access index via a helper class 
-i0.insertFront([0,1]);
-assert(array(i0[]) == [0,1]); // assumes no index refused these elements
-i0.insertFront([3,4,5]);
-assert(array(i0[]) == [3,4,5,0,1]); // ditto
-i0.removeAny();
-assert(array(i0[]) == [3,4,5,0]);
-i0.removeFront();
-assert(array(i0[]) == [4,5,0]);
------
 $(TEXTWITHCOMMAS Complexities:)
 $(BOOKTABLE, $(TR $(TH) $(TH))
 $(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
@@ -160,20 +146,24 @@ c[1][1] = "a"; // bad! index 1 now contains duplicates and is in invalid state!
 In general, the container must either require the user 
 not to perform any damning operation on its elements (which likely will entail 
 paranoid and continual checking of the validity of its indeces), or else not 
-provide a mutable view of its elements. multi_index chooses the latter.
+provide a mutable view of its elements. By default, multi_index chooses the 
+latter (with controlled exceptions). 
 
-For operations which are sure not to invalidate any index, one might simply 
-cast away the constness of the returned element, as elements are not stored 
-with special constness, though we don't recommended this on the grounds of
-aesthetics (it's ew) and maintainability (if the code changes, it's a ticking 
-time bomb).
+Thus you are limited to modification operations for which the 
+indeces can detect and perform any fixups (or possibly reject). You can use 
+a remove/modify/insert workflow here, or functions modify and replace, which
+each index implements. 
 
-Otherwise, the user must be limited to modification operations which the 
-indeces can detect and perform any fixups for (or possibly reject). Currently 
-that's remove/modify/insert (todo: boost::_multi_index exposes per-index 
-replace and modify functions - shall 
-we provide these also? issue: modify exposes a reference to container's 
-elements) 
+For modifications which are sure not to invalidate any index, you might simply 
+cast away the constness of the returned element. This will work, 
+but it is not recommended on the grounds of aesthetics (it's ew) and 
+maintainability (if the code changes, it's a ticking time bomb).
+
+Finally, if you just have to have a mutable view, include
+MutableView in the MultiIndexContainer specification. This is
+the least safe option (but see Signals and Slots), and you might make liberal
+use of the convenience function check provided by MultiIndexContainer, 
+which asserts the validity of each index.
 
 Efficiency:
 
@@ -224,6 +214,84 @@ t.remove(item);
 and removal will not perform a log(n) search on the second index 
 (rebalancing can't be avoided).
 
+Signals and Slots:
+
+An expiramental feature of multi_index. You can design your value type
+to be a signal, a la std.signals, and hook it up to your 
+MultiIndexContainer. (Note: std.signals won't work with multi_index,
+so don't bother trying)
+
+Example:
+-------
+
+import multi_index;
+import std.algorithm: moveAll;
+
+class Value{
+    int _i;
+
+    @property int i()const{ return i; }
+    @property void i(int i1){
+        _i = i1;
+        emit(); // MultiIndexContainer is notified that this value's 
+                // position in indeces may need to be fixed
+    }
+
+    // signal impl - MultiIndexContainer will use these
+    // to connect. In this example, we actually only need
+    // a single slot.
+    void delegate()[] slots;
+
+    void connect(void delegate() slot){
+        slots ~= slot;
+    }
+    void disconnect(void delegate() slot){
+        size_t index = slots.length;
+        foreach(i, slot1; slots){
+            if(slot is slot1){
+                index = i;
+                moveAll(slots[i+1 .. $], slots[i .. $-1]);
+                slots.length-=1;
+                break;
+            }
+        }
+    }
+    void emit(){
+        foreach(slot; slots){
+            slot();
+        }
+    }
+}
+
+alias MultiIndexContainer!(Value,
+    IndexedBy!(OrderedUnique!("a.i")),
+    SignalOnChange!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
+                                      // it to use the signal defined in Value.
+                                      // you just need to pass in the index number.
+) MyContainer;
+
+MyContainer c = new MyContainer;
+
+// populate c
+
+Value v = c.first();
+
+v.i = 22; // v's position in c is automatically fixed
+-------
+
+Thus, MultiIndexContainers can be kept valid automatically PROVIDED no
+modifications occur other than those which call emit.
+
+But what happens if a modification breaks, for example, a uniqueness 
+constraint? Well, you have two options: remove the offending element 
+silently, or remove it loudly (throw an exception). multi_index chooses
+the latter in this case.
+
+Thread Safety:
+
+multi_index is not designed to be used in multithreading.
+Find yourself a relational database.
+
 
  */
 module multi_index;
@@ -235,7 +303,10 @@ module multi_index;
  *   special constructor for SortedRange?
  *  random access index
  *   insertAfter ? insertBefore ?
- *  move semantics ?
+ *  fix BitHackery
+ *  MutableView
+ *  check
+ *  modify(r, mod, rollback)
  *  tagging
  *  other indeces? 
  *  dup
@@ -2534,7 +2605,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
             ThisNode*[] _heap;
 
             static size_t p(size_t n) pure{
-                return n / 2;
+                return (n-1) / 2;
             }
 
             static size_t l(size_t n) pure{
@@ -2557,22 +2628,10 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                         swapAt(n, p(n));
                         n = p(n);
                     }while(n > 0 && less(key(_heap[p(n)].value), k));
-                }else if(l(n) < node_count){
-                    auto ch = l(n);
-                    auto chk = key(_heap[ch].value);
-                    if (r(n) < node_count){
-                        auto rk = key(_heap[r(n)].value);
-                        if(less(chk, rk)){
-                            chk = rk;
-                            ch = r(n);
-                        }
-                    }
-                    while(l(n) < node_count && less(k,chk)){
-                        swapAt(n, ch);
-                        n = ch;
-                        if(l(n) >= node_count) break;
-                        ch = l(n);
-                        chk = key(_heap[ch].value);
+                }else 
+                    while(l(n) < node_count){ 
+                        auto ch = l(n);
+                        auto chk = key(_heap[ch].value);
                         if (r(n) < node_count){
                             auto rk = key(_heap[r(n)].value);
                             if(less(chk, rk)){
@@ -2580,8 +2639,60 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                                 ch = r(n);
                             }
                         }
+                        if(!less(k, chk)) break;
+                        swapAt(n, ch);
+                        n = ch;
+                    }
+            }
+
+            bool isLe(size_t a, size_t b){
+                return(!less(key(_heap[b].value),key(_heap[a].value)));
+            }
+
+            bool _invar(size_t i){
+                bool result = true;
+                if(i > 0){
+                    result &= (isLe(i,p(i))); 
+                }
+                if( l(i) < node_count ){
+                    result &= (isLe(l(i), i));
+                }
+                if( r(i) < node_count ){
+                    result &= (isLe(r(i), i));
+                }
+                return result;
+            }
+
+            void check(){
+                for(size_t i = 0; i < node_count; i++){
+                    if(i > 0){
+                        assert(isLe(i,p(i))); 
+                    }
+                    if( l(i) < node_count ){
+                        assert(isLe(l(i), i));
+                    }
+                    if( r(i) < node_count ){
+                        assert(isLe(r(i), i));
                     }
                 }
+
+            }
+
+            void printHeap(){
+                printHeap1(0,0);
+            }
+
+            void printHeap1(size_t n, size_t indent){
+                if (l(n) < node_count) printHeap1(l(n), indent+1);
+                for(int i = 0; i < indent; i++)
+                    write("..");
+                //static if(__traits(compiles, (n.value.toString()))){
+                    writefln("%s (%s) %s", n, _heap[n].value.toString(), _invar(n) ? "" : "<--- bad!!!");
+                //}else{
+                    //writefln("(%s)", _heap[n].value);
+                //}
+
+                if (r(n) < node_count) printHeap1(r(n), indent+1);
             }
 
             /// The primary range of the index, which embodies a bidirectional
@@ -2728,7 +2839,7 @@ Complexity: ??
 Returns the _capacity of the index, which is the length of the
 underlying store 
 */
-            @property size_t capacity()const{
+            size_t capacity()const{
                 return _heap.length;
             }
 
@@ -3056,7 +3167,8 @@ Complexity: $(BIGOH 1)
 */
             Range opSlice(){
                 if(empty) return Range(this, null, hashes.length);
-                return Range(this, _first, hash(key(_first.value)));
+                auto ix = hash(key(_first.value))%hashes.length;
+                return Range(this, _first, ix);
             }
 
             // returns true iff k was found.
@@ -3127,10 +3239,11 @@ Reports whether value exists in this collection
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool contains(Value value){
+            bool contains(const(Value) value){
                 ThisNode* node;
                 size_t index;
-                return _find(key(value), node,index);
+                auto r =  _find(key(value), node,index);
+                return r;
             }
 
             bool contains(KeyType k){
@@ -3280,17 +3393,19 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     }
                 }
             }else{
-                bool _DenyInsertion(ThisNode* n, out ThisNode* cursor){
+                bool _DenyInsertion(ThisNode* node, out ThisNode* cursor)
+                {
                     size_t index;
-                    return _find(key(n.value), cursor, index);
+                    auto r =  _find(key(node.value), cursor, index);
+                    return r;
                 }
-                void _Insert(ThisNode* n, ThisNode* cursor){
+                void _Insert(ThisNode* node, ThisNode* cursor){
                     if(cursor){
-                        cursor.index!N.insertNext(n);
+                        cursor.index!N.insertNext(node);
                     }else{
-                        size_t index = hash(key(n.value))%hashes.length;
+                        size_t index = hash(key(node.value))%hashes.length;
                         assert ( !hashes[index] );
-                        setFirst(n, index);
+                        setFirst(node, index);
                     }
                 }
             }
@@ -3309,6 +3424,9 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 return cast(size_t) load;
             }
 
+            @property size_t capacity(){
+                return hashes.length;
+            }
             void reserve(size_t n){
                 if (n <= maxLoad(hashes.length)) return;
                 size_t i = 0;
@@ -3371,9 +3489,12 @@ Complexity:
 $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
 */
             size_t insert(SomeValue)(SomeValue value)
-            if(isImplicitlyConvertible!(SomeValue, const(Value))){
+            if(isImplicitlyConvertible!(SomeValue, const(Value))) {
                 ThisNode* node;
                 size_t index;
+                if(maxLoad(hashes.length) < node_count+1){
+                    reserve(max(maxLoad(2* hashes.length + 1), node_count+1));
+                }
                 static if(!allowDuplicates){
                     // might deny, so have to look 
                     auto k = key(value);
@@ -3388,9 +3509,6 @@ $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
                     if(!newnode) return 0;
                     auto k = key(value);
                     bool found = _find(k, node, index);
-                }
-                if(maxLoad(hashes.length) < node_count+1){
-                    reserve(max(maxLoad(2* hashes.length + 1), node_count+1));
                 }
                 if(found){
                     // meh, lets not walk to the end of equal range
@@ -3735,9 +3853,10 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
                 template ForEachIndex2(size_t j){
                     static if(j < Mixin2Index.Indeces.length){
                         enum result = Replace!(q{
-                            if(!container.index!($i)._NotifyChange(&this))
+                            if(!container.index!($i)._NotifyChange(&this)){
                                 goto denied;
-                        }, "$i", j) ~ ForEachIndex2!(j+1).result;
+                            }
+                        }, "$i", Mixin2Index.Indeces[j]) ~ ForEachIndex2!(j+1).result;
                     }else{
                         enum result = "";
                     }
@@ -3754,7 +3873,7 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
             }
         }
 
-        mixin(ForEachSlot!(0).stuff);
+        mixin(ForEachSignal!(0).stuff);
     }
 
 
@@ -3810,7 +3929,36 @@ class MultiIndexContainer(Value, IndexedBy, Signals = SignalOnChange!()){
         return new ThisNode;
     }
 
+    /// disconnect signals from slots
+    template ForEachDisconnectSignal(size_t i){
+        static if(i < NormSignals.Mixin2Index.length){
+            enum string[] Ms = NormSignals.Mixin2Index[i].MixinAliases;
+
+            template ForEachAlias(size_t j){
+                static if(j < Ms.length){
+                    static if(Ms[j] == ""){
+                        enum result = Replace!(q{
+                            node.value.disconnect(&node.slot$i);
+                        }, "$i", i) ~ ForEachAlias!(j+1).result;
+                    }else{
+                        enum result = Replace!(q{
+                            node.value.$alias.disconnect(&node.slot$i);
+                        }, "$i", i,"$alias", Ms[j]) ~ 
+                        ForEachAlias!(j+1).result;
+                    }
+                }else{
+                    enum result = "";
+                }
+            }
+
+            enum result = ForEachAlias!(0).result ~ ForEachDisconnectSignal!(i+1).result;
+        }else{
+            enum result = "";
+        }
+    }
+
     void dealloc(ThisNode* node){
+        mixin(ForEachDisconnectSignal!(0).result);
         object.clear(node);
     }
 
@@ -3844,9 +3992,40 @@ class MultiIndexContainer(Value, IndexedBy, Signals = SignalOnChange!()){
         }else enum result = "";
     }
 
+    /// connect signals to slots
+    template ForEachConnectSignal(size_t i){
+        static if(i < NormSignals.Mixin2Index.length){
+            enum string[] Ms = NormSignals.Mixin2Index[i].MixinAliases;
+
+            template ForEachAlias(size_t j){
+                static if(j < Ms.length){
+                    static if(Ms[j] == ""){
+                        enum result = Replace!(q{
+                            node.value.connect(&node.slot$i);
+                        }, "$i", i) ~ ForEachAlias!(j+1).result;
+                    }else{
+                        enum result = Replace!(q{
+                            node.value.$alias.connect(&node.slot$i);
+                        }, "$i", i,"$alias", Ms[j]) ~ 
+                        ForEachAlias!(j+1).result;
+                    }
+                }else{
+                    enum result = "";
+                }
+            }
+
+            enum result = ((i == 0) ? "node.container = this;" : "") ~
+                ForEachAlias!(0).result ~ 
+                ForEachConnectSignal!(i+1).result;
+        }else{
+            enum result = "";
+        }
+    }
+
     ThisNode* _InsertAllBut(size_t N)(Value value){
         ThisNode* node = alloc();
         node.value = value;
+        mixin(ForEachConnectSignal!(0).result);
         mixin(ForEachCheckInsert!(0, N).result);
         mixin(ForEachDoInsert!(0, N).result);
         node_count++;
