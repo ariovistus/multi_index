@@ -1,8 +1,8 @@
 /**
-A port of Joaquin M Lopez Munoz' _multi_index library.
+A port of Joaquín M López Muñoz' _multi_index library.
 
 compilation options: $(BR)
-<b>version=PtrHackery</b> - In boost::_multi_index, Munoz stores the color of a RB 
+<b>version=PtrHackery</b> - In boost::_multi_index, Muñoz stores the color of a RB 
 Tree Node in the low bit of one of the pointers with the rationale that on 
 'many' architectures, pointers only point to even addresses.
 
@@ -189,9 +189,9 @@ However removal introduces some inefficiency
 tree1.remove(item);
 tree2.remove(&item); // requires a log(n) search, followed by a potential log(n) rebalancing
 ------
-Munoz suggests making the element type of T2 an iterator of T1 for to obviate
+Muñoz suggests making the element type of T2 an iterator of T1 for to obviate
 the need for the second search. However, this is not possible in D, as D 
-espouses ranges rather than indeces. (As a side note, Munoz proceeds to point 
+espouses ranges rather than indeces. (As a side note, Muñoz proceeds to point 
 out that the iterator solution will require at minimum (N * ptrsize) more bytes 
 of memory than will _multi_index, so we needn't lament over this fact.)
 
@@ -216,7 +216,7 @@ and removal will not perform a log(n) search on the second index
 
 Signals and Slots:
 
-An expiramental feature of multi_index. You can design your value type
+An experimental feature of multi_index. You can design your value type
 to be a signal, a la std.signals, and hook it up to your 
 MultiIndexContainer. (Note: std.signals won't work with multi_index,
 so don't bother trying)
@@ -239,7 +239,9 @@ class Value{
 
     // signal impl - MultiIndexContainer will use these
     // to connect. In this example, we actually only need
-    // a single slot.
+    // a single slot. For a value type with M signals 
+    // (differentiated with mixin aliases), there will be 
+    // M slots connected.
     void delegate()[] slots;
 
     void connect(void delegate() slot){
@@ -305,7 +307,6 @@ module multi_index;
  *   insertAfter ? insertBefore ?
  *  fix BitHackery
  *  MutableView
- *  check
  *  modify(r, mod, rollback)
  *  tagging
  *  other indeces? 
@@ -319,7 +320,7 @@ version = BucketHackery;
 import std.array;
 import std.range;
 import std.exception: enforce;
-import std.algorithm: find, swap, copy, fill, max;
+import std.algorithm: find, swap, copy, fill, max, startsWith;
 import std.traits: isImplicitlyConvertible;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
@@ -761,13 +762,16 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 return Range(null,null);
             }
 
-/+
-                todo:
-                stableRemoveAny 
-                stableRemoveFront
-                stableRemoveBack
-                stableLinearRemove
-                +/
+            /+
+            todo:
+            stableRemoveAny 
+            stableRemoveFront
+            stableRemoveBack
+            stableLinearRemove
+            +/
+
+            void _Check(){
+            }
         }
     }
 }
@@ -1117,6 +1121,9 @@ for this index
                 return Range(this, s, _length);
             }
             // stableLinearRemove
+
+            void _Check(){
+            }
         }
     }
 }
@@ -2491,14 +2498,12 @@ Complexity: $(BIGOH log(n))
             if(indent is 0)
                 writeln();
         }
-    version(RBDoChecks)
-    {
 
         /*
          * Check the tree for validity.  This is called after every add or remove.
          * This should only be enabled to debug the implementation of the RB Tree.
          */
-        void check()
+        void _Check()
         {
             //
             // check implementation of the tree
@@ -2548,7 +2553,6 @@ Complexity: $(BIGOH log(n))
                 throw e;
             }
         }
-    }
 }
 
 /// A red black tree index
@@ -2645,55 +2649,6 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     }
             }
 
-            bool isLe(size_t a, size_t b){
-                return(!less(key(_heap[b].value),key(_heap[a].value)));
-            }
-
-            bool _invar(size_t i){
-                bool result = true;
-                if(i > 0){
-                    result &= (isLe(i,p(i))); 
-                }
-                if( l(i) < node_count ){
-                    result &= (isLe(l(i), i));
-                }
-                if( r(i) < node_count ){
-                    result &= (isLe(r(i), i));
-                }
-                return result;
-            }
-
-            void check(){
-                for(size_t i = 0; i < node_count; i++){
-                    if(i > 0){
-                        assert(isLe(i,p(i))); 
-                    }
-                    if( l(i) < node_count ){
-                        assert(isLe(l(i), i));
-                    }
-                    if( r(i) < node_count ){
-                        assert(isLe(r(i), i));
-                    }
-                }
-
-            }
-
-            void printHeap(){
-                printHeap1(0,0);
-            }
-
-            void printHeap1(size_t n, size_t indent){
-                if (l(n) < node_count) printHeap1(l(n), indent+1);
-                for(int i = 0; i < indent; i++)
-                    write("..");
-                //static if(__traits(compiles, (n.value.toString()))){
-                    writefln("%s (%s) %s", n, _heap[n].value.toString(), _invar(n) ? "" : "<--- bad!!!");
-                //}else{
-                    //writefln("(%s)", _heap[n].value);
-                //}
-
-                if (r(n) < node_count) printHeap1(r(n), indent+1);
-            }
 
             /// The primary range of the index, which embodies a bidirectional
             /// range. 
@@ -2945,6 +2900,49 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                     _RemoveAll(node);
                 }
                 return Range(this,0,0);
+            }
+
+            bool isLe(size_t a, size_t b){
+                return(!less(key(_heap[b].value),key(_heap[a].value)));
+            }
+
+            bool _invariant(size_t i){
+                bool result = true;
+                if(i > 0){
+                    result &= (isLe(i,p(i))); 
+                }
+                if( l(i) < node_count ){
+                    result &= (isLe(l(i), i));
+                }
+                if( r(i) < node_count ){
+                    result &= (isLe(r(i), i));
+                }
+                return result;
+            }
+
+            void _Check(){
+                for(size_t i = 0; i < node_count; i++){
+                    assert (_heap[i].index!N._index == i);
+                    assert (_invariant(i));
+                }
+
+            }
+
+            void printHeap(){
+                printHeap1(0,0);
+            }
+
+            void printHeap1(size_t n, size_t indent){
+                if (l(n) < node_count) printHeap1(l(n), indent+1);
+                for(int i = 0; i < indent; i++)
+                    write("..");
+                static if(__traits(compiles, (_heap[n].value.toString()))){
+                    writefln("%s (%s) %s", n, _heap[n].value.toString(), _invariant(n) ? "" : "<--- bad!!!");
+                }else{
+                    writefln("(%s)", _heap[n].value);
+                }
+
+                if (r(n) < node_count) printHeap1(r(n), indent+1);
             }
         }
     }
@@ -3599,6 +3597,32 @@ $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
                 }
                 return count;
             }
+
+            void _Check(){
+                bool first = true;
+                foreach(i, node; hashes){
+                    if(!node) continue;
+                    if(first){
+                        assert(_first is node);
+                        first = false;
+                    }
+                    assert(isFirst(node));
+                    ThisNode* prev = null;
+                    while(node){
+
+                        assert(hash(key(node.value))%hashes.length == i);
+                        if(!isFirst(node)){
+                            static if(!allowDuplicates){
+                                assert(!eq(key(prev.value), key(node.value)));
+                            }
+                            // gonna be hard to enforce that equal elements are contiguous
+                        }
+
+                        prev = node;
+                        node = node.index!N.next;
+                    }
+                }
+            }
         }
     }
 }
@@ -3655,6 +3679,14 @@ to the same index more than once.
 
 struct SignalOnChange(L...) {
     struct Inner(IndexedBy){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
         enum N = IndexedBy.List.length;
         alias L List;
 
@@ -3898,16 +3930,76 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
     mixin(stuff);
 }
 
+struct ConstView{}
+struct MutableView{}
+
+auto CheckArgs(X...)(){
+        size_t numIndexedBy = 0, ixIndexedBy = -1;
+        size_t numSignalOnChanged = 0, ixSignalOnChanged = -1;
+        size_t numViews = 0, ixView = -1;
+        foreach(i,x; X){
+            // todo: find a way to test if x is an instatiation of template IndexedBy
+            static if(x.stringof.startsWith("IndexedBy") &&
+                    __traits(compiles, x.List)){
+                numIndexedBy++;
+                assert(x.List.length > 0, "MultiIndexContainer requires"
+                        " at least one index");
+                ixIndexedBy = i;
+            }else static if(x.stringof.startsWith("SignalOnChange") &&
+                    true){
+                numSignalOnChanged++;
+                ixSignalOnChanged = i;
+            }else static if(is(x == MutableView) || is(x == ConstView)){
+                numViews++;
+                ixView = i;
+            }else{
+                assert(false, Format!(
+                            "Invalid argument passed to MultiIndexContainer"
+                            " specification (index %s): %s", i, x.stringof));
+            }
+        }
+        assert(numIndexedBy == 1, "MultiIndexContainer requires an"
+                " IndexedBy specification"); 
+        assert(numSignalOnChanged <= 1, "Multiple SignalOnChange "
+                "specifications are not allowed");
+        assert(numSignalOnChanged <= 1, "Multiple Constness Views "
+                "are not allowed");
+
+        return [ixIndexedBy, ixSignalOnChanged, ixView];
+}
+struct ContainerArgs(X...){
+
+    enum ixs = CheckArgs!(X)();
+
+    alias X[ixs[0]] IndexedBy;
+
+    static if(ixs[1] == -1){
+        alias SignalOnChange!().Inner!(IndexedBy) Signals;
+    }else{
+        alias typeof(X[ixs[1]].Inner!(IndexedBy).exposeType()) Signals;
+        // @@@BUG@@@ following gives forward reference error
+        //alias X[ixs[1]] Signals0;
+        //alias Signals0.Inner!(IndexedBy) Signals;
+    }
+
+    static if(ixs[2] ==  -1){
+        alias ConstView ConstnessView;
+    }else{
+        alias X[ixs[2]] ConstnessView;
+    }
+}
+
 /++ 
 The container
 +/
-class MultiIndexContainer(Value, IndexedBy, Signals = SignalOnChange!()){
+class MultiIndexContainer(RawValue, Args...){
 
-    alias Signals.Inner!(IndexedBy) NormSignals;
+    alias ContainerArgs!(Args).IndexedBy IndexedBy;
+    alias ContainerArgs!(Args).Signals NormSignals;
     alias MNode!(typeof(this), IndexedBy,NormSignals,Value) ThisNode;
+    alias RawValue Value;
 
     size_t node_count;
-
 
     template ForEachCtorMixin(size_t i){
         static if(i < IndexedBy.List.length){
@@ -4131,6 +4223,20 @@ denied:
         }
         mixin(ForEachClear!0 .result);
         node_count = 0;
+    }
+
+    template ForEachCheck(size_t i){
+        static if(i < IndexedBy.List.length){
+            enum result = Replace!(q{
+                index!($i)._Check();
+            },"$i", i) ~ ForEachCheck!(i+1).result;
+        }else{
+            enum result = "";
+        }
+    }
+
+    void check(){
+        mixin(ForEachCheck!(0).result);
     }
 
     template ForEachAlias(size_t N,size_t index, alias X){

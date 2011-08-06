@@ -99,7 +99,7 @@ unittest{
     auto d = a.get_index!1;
     c.insert(0);
     c.insert(2);
-    c.check();
+    a.check();
     c.insert(-1);
     assert(array(c[]) == [-1,0,2]);
     assert(array(d[]) == [2,0,-1]);
