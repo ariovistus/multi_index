@@ -1,0 +1,26 @@
+
+M signals to N indeces
+
+suppose 1 signal S applied to N indeces
+then 1 slot W needs to be declared in node.
+W needs to be connected/disconnected to value
+W needs to tell each index of an update at node
+
+suppose N signals at 1 index
+signals must be unique
+if M signals at exactly 1 index, then need 1 slot W, 
+ which gets connected to all M signals.
+
+There may be many nodes/values, want to minimize the number of slots that 
+get registered to minimize memory consumption. Having 1 slot per index not so 
+good?
+
+Given set S of N indeces, M signals with each signal applied to a subset of S,
+ if we make 1 slot per index, then we need to register worst case N*M slots per
+ node. Requires at most N slot functions to be declared.
+
+ if we make 1 slot per signal, then we need to register M slots per node.
+ Requires at most M slot functions to be declared.
+
+ Optimization: suppose signals S1, S2 attached to the same set of indeces, then
+  we need only define 1 slot function W, and connect it to both S1, S2.

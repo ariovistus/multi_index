@@ -331,11 +331,19 @@ version(PtrHackery){
 }
 
 /// A doubly linked list index.
-template Sequenced(){
+struct Sequenced(){
     enum bool BenefitsFromSignals = false;
     // damn you, ddoc
     /// _
-    template Inner(ThisContainer,ThisNode, Value, size_t N){
+    struct Inner(ThisContainer,ThisNode, Value, size_t N){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
 
 /**
 Defines the index' primary range, which embodies a
@@ -777,10 +785,18 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 }
 
 /// A random access index.
-template RandomAccess(){
+struct RandomAccess(){
     enum bool BenefitsFromSignals = false;
     /// _
-    template Inner(ThisContainer,ThisNode, Value, size_t N){
+    struct Inner(ThisContainer,ThisNode, Value, size_t N){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,ThisContainer) IndexTuple;
 
@@ -1745,16 +1761,14 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         static if(allowDuplicates)
         {
             n.index!N.setColor(_end);
-            version(RBDoChecks)
-                check();
+            version(RBDoChecks) _Check();
             return added;
         }
         else
         {
             if(added)
                 n.index!N.setColor(_end);
-            version(RBDoChecks)
-                check();
+            version(RBDoChecks) _Check();
             return added;
         }
     }
@@ -2093,8 +2107,7 @@ Complexity: ??
 
     void _FixPosition(ThisNode* node, KeyType oldPosition, ThisNode* cursor)
         out{
-            version(RBDoChecks)
-                check();
+            version(RBDoChecks) _Check();
         }body{
         static if(allowDuplicates){
             if(cursor){
@@ -2119,7 +2132,10 @@ Complexity: ??
     // n's value has changed and its position might be invalid.
     // remove n if it violates an invariant.
     // returns: true iff n's validity has been restored
-    bool _NotifyChange(Node node){
+    bool _NotifyChange(Node node)
+    out(r){
+        _Check();
+    }body{
         auto newPosition = key(node.value);
         Node next = node.index!N.next;
         Node prev = node.index!N.prev;
@@ -2165,8 +2181,7 @@ Complexity: ??
     size_t stableInsert(Stuff)(Stuff stuff) 
         if (isImplicitlyConvertible!(Stuff, Elem))
         out(r){
-            version(RBDoChecks)
-                check();
+            version(RBDoChecks) _Check();
         }body{
             static if(!allowDuplicates){
                 Node p;
@@ -2193,8 +2208,7 @@ Complexity: ??
         if(isInputRange!Stuff && 
                 isImplicitlyConvertible!(ElementType!Stuff, Elem))
         out(r){
-            version(RBDoChecks)
-                check();
+            version(RBDoChecks) _Check();
         }body{
             size_t result = 0;
             foreach(e; stuff)
@@ -2209,8 +2223,7 @@ Complexity: ??
 
     Node _Remove(Node n)
     out(r){
-        version(RBDoChecks)
-            check();
+        version(RBDoChecks) _Check();
     }body{
         return n.index!N.remove(_end);
     }
@@ -2258,8 +2271,7 @@ Complexity: ??
     +/
     Range remove(Range r)
     out(r){
-        version(RBDoChecks)
-            check();
+        version(RBDoChecks) _Check();
     }body{
         auto b = r._begin;
         auto e = r._end;
@@ -2284,8 +2296,7 @@ Complexity: ??
     +/
     Range remove(Take!Range r)
     out(r){
-        version(RBDoChecks)
-            check();
+        version(RBDoChecks) _Check();
     }body{
         auto b = r.source._begin;
 
@@ -2329,8 +2340,7 @@ Complexity: ??
     size_t removeKey(U)(U[] keys...)
     if(isImplicitlyConvertible!(U, KeyType))
     out(r){
-        version(RBDoChecks)
-            check();
+        version(RBDoChecks) _Check();
     }body{
         size_t count = 0;
 
@@ -2353,8 +2363,7 @@ Complexity: ??
             isImplicitlyConvertible!(ElementType!Stuff, KeyType) &&
             !is(Stuff == Elem[]))
     out(r){
-        version(RBDoChecks)
-            check();
+        version(RBDoChecks) _Check();
     }body{
         //We use array in case stuff is a Range from this RedBlackTree - either
         //directly or indirectly.
@@ -2556,12 +2565,20 @@ Complexity: $(BIGOH log(n))
 }
 
 /// A red black tree index
-template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
+struct Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Compare = "a<b"){
 
     enum bool BenefitsFromSignals = true;
 
-    template Inner(ThisContainer, ThisNode, Value, size_t N){
+    struct Inner(ThisContainer, ThisNode, Value, size_t N){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
         alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
 
@@ -2591,7 +2608,15 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
     enum bool BenefitsFromSignals = true;
 
     /// _
-    template Inner(ThisContainer, ThisNode, Value, size_t N){
+    struct Inner(ThisContainer, ThisNode, Value, size_t N){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,KeyFromValue, Compare, ThisContainer) IndexTuple;
 
@@ -2991,7 +3016,15 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
     enum bool BenefitsFromSignals = true;
 
     /// _
-    template Inner(ThisContainer, ThisNode, Value, size_t N){
+    struct Inner(ThisContainer, ThisNode, Value, size_t N){
+        // by some forward referencing error or other, (see error11.d)
+        // I can't seem to get a hold of inner in ContainerArgs, but
+        // typeof(exposeType()) seems to work. Desparate times require
+        // desparate measures, I guess
+        static exposeType(){
+            Inner i;
+            return i;
+        }
         alias unaryFun!KeyFromValue key;
         alias typeof(key(Value.init)) KeyType;
         static if (Hash == "??"){
@@ -3645,6 +3678,38 @@ template GetMixinAlias(valueSignal){
     alias valueSignal.MixinAlias GetMixinAlias;
 }
 
+// todo - find better name
+template OU(T){
+    template arr2tuple(stuff...){
+        static assert(is(typeof(stuff[0]) == T[]));
+
+        static if(stuff[0].length){
+            alias arr2tuple!(stuff[0][1 .. $], stuff[1 .. $], stuff[0][0]) arr2tuple;
+        }else{
+            alias stuff[1 .. $] arr2tuple;
+        }
+    }
+
+    T[] orderedUniqueInsert(T[] x, T value){
+        size_t i;
+        while(i < x.length && x[i] < value) i++;
+        if(i < x.length && x[i] == value) return x;
+        T[] ret = new T[](x.length+1);
+        ret[0 .. i] = x[0 .. i];
+        ret[i] = value;
+        ret[i+1 .. $] = x[i .. $];
+        return ret;
+    }
+    T[] TypeList2SortedArray(L...)(){
+        alias L List;
+        T[] ret = [];
+        foreach(T l; List){
+            ret = orderedUniqueInsert(ret, l);
+        }
+        return ret;
+    }
+}
+
 /** 
 Specifies how to hook up value signals to indeces.
 
@@ -3690,26 +3755,6 @@ struct SignalOnChange(L...) {
         enum N = IndexedBy.List.length;
         alias L List;
 
-        template OU(T){
-            static T[] orderedUniqueInsert(T[] x, T value){
-                size_t i;
-                while(i < x.length && x[i] < value) i++;
-                if(i < x.length && x[i] == value) return x;
-                T[] ret = new T[](x.length+1);
-                ret[0 .. i] = x[0 .. i];
-                ret[i] = value;
-                ret[i+1 .. $] = x[i .. $];
-                return ret;
-            }
-            static T[] TypeList2SortedArray(L...)(){
-                alias L List;
-                T[] ret = [];
-                foreach(T l; List){
-                    ret = orderedUniqueInsert(ret, l);
-                }
-                return ret;
-            }
-        }
 
         template GetIndex(valueSignal){
             static if(__traits(compiles,valueSignal.Index)){
@@ -3912,11 +3957,16 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
     template ForEachIndex(size_t N,L...){
         static if(L.length > 0){
             enum indexN = Format!("index%s",N);
-            alias L[0] L0;
+            //alias L[0] L0;
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
                     alias L$N.Inner!(ThisContainer, typeof(this),Value,$N) M$N;
+                    pragma(msg, M$N);
+                    pragma(msg, __traits(allMembers, M$N));
+                    pragma(msg, M$N.NodeTuple);
+                    pragma(msg, "-----------------------------------------------------");
+                    pragma(msg, M$N.NodeMixin);
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                 },  "$N", N) ~ 
@@ -3927,6 +3977,7 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
     }
 
     enum stuff = ForEachIndex!(0, IndexedBy.List).result;
+    pragma(msg, stuff);
     mixin(stuff);
 }
 
@@ -3962,7 +4013,7 @@ auto CheckArgs(X...)(){
                 " IndexedBy specification"); 
         assert(numSignalOnChanged <= 1, "Multiple SignalOnChange "
                 "specifications are not allowed");
-        assert(numSignalOnChanged <= 1, "Multiple Constness Views "
+        assert(numViews <= 1, "Multiple Constness Views "
                 "are not allowed");
 
         return [ixIndexedBy, ixSignalOnChanged, ixView];
@@ -3995,9 +4046,22 @@ The container
 class MultiIndexContainer(RawValue, Args...){
 
     alias ContainerArgs!(Args).IndexedBy IndexedBy;
+
     alias ContainerArgs!(Args).Signals NormSignals;
     alias MNode!(typeof(this), IndexedBy,NormSignals,Value) ThisNode;
     alias RawValue Value;
+    /+
+    template IndexedByList0(size_t i, stuff...){
+        static if(i < IndexedBy.List.length){
+            alias typeof(IndexedBy.List[i].Inner!(typeof(this), ThisNode, Value, i).exposeType()) x;
+            alias IndexedByList0!(i+1, stuff, x).result result;
+        }else{
+            alias stuff result;
+        }
+    }
+
+    alias IndexedByList0!(0).result IndexedByList;
+    +/
 
     size_t node_count;
 
@@ -4021,36 +4085,21 @@ class MultiIndexContainer(RawValue, Args...){
         return new ThisNode;
     }
 
-    /// disconnect signals from slots
-    template ForEachDisconnectSignal(size_t i){
-        static if(i < NormSignals.Mixin2Index.length){
-            enum string[] Ms = NormSignals.Mixin2Index[i].MixinAliases;
-
-            template ForEachAlias(size_t j){
-                static if(j < Ms.length){
-                    static if(Ms[j] == ""){
-                        enum result = Replace!(q{
-                            node.value.disconnect(&node.slot$i);
-                        }, "$i", i) ~ ForEachAlias!(j+1).result;
-                    }else{
-                        enum result = Replace!(q{
-                            node.value.$alias.disconnect(&node.slot$i);
-                        }, "$i", i,"$alias", Ms[j]) ~ 
-                        ForEachAlias!(j+1).result;
-                    }
+    void dealloc(ThisNode* node){
+        // disconnect signals from slots
+        foreach(i, x; NormSignals.Mixin2Index){
+            foreach(j, malias; OU!(string).arr2tuple!(x.MixinAliases)){
+                static if(malias == ""){
+                    mixin(Replace!(q{
+                        node.value.disconnect(&node.slot$i);
+                    }, "$i", i));
                 }else{
-                    enum result = "";
+                    mixin(Replace!(q{
+                        node.value.$alias.disconnect(&node.slot$i);
+                    }, "$i", i,"$alias", malias)); 
                 }
             }
-
-            enum result = ForEachAlias!(0).result ~ ForEachDisconnectSignal!(i+1).result;
-        }else{
-            enum result = "";
         }
-    }
-
-    void dealloc(ThisNode* node){
-        mixin(ForEachDisconnectSignal!(0).result);
         object.clear(node);
     }
 
@@ -4084,41 +4133,42 @@ class MultiIndexContainer(RawValue, Args...){
         }else enum result = "";
     }
 
-    /// connect signals to slots
-    template ForEachConnectSignal(size_t i){
-        static if(i < NormSignals.Mixin2Index.length){
-            enum string[] Ms = NormSignals.Mixin2Index[i].MixinAliases;
-
-            template ForEachAlias(size_t j){
-                static if(j < Ms.length){
-                    static if(Ms[j] == ""){
-                        enum result = Replace!(q{
-                            node.value.connect(&node.slot$i);
-                        }, "$i", i) ~ ForEachAlias!(j+1).result;
-                    }else{
-                        enum result = Replace!(q{
-                            node.value.$alias.connect(&node.slot$i);
-                        }, "$i", i,"$alias", Ms[j]) ~ 
-                        ForEachAlias!(j+1).result;
-                    }
-                }else{
-                    enum result = "";
-                }
-            }
-
-            enum result = ((i == 0) ? "node.container = this;" : "") ~
-                ForEachAlias!(0).result ~ 
-                ForEachConnectSignal!(i+1).result;
-        }else{
-            enum result = "";
-        }
-    }
-
     ThisNode* _InsertAllBut(size_t N)(Value value){
         ThisNode* node = alloc();
         node.value = value;
-        mixin(ForEachConnectSignal!(0).result);
+
+        // connect signals to slots
+        foreach(i, x; NormSignals.Mixin2Index){
+            static if(i == 0) node.container = this;
+
+            foreach(j, malias; OU!(string).arr2tuple!(x.MixinAliases)){
+                static if(malias == ""){
+                    mixin(Replace!(q{
+                        node.value.connect(&node.slot$i);
+                    }, "$i", i));
+                }else{
+                    mixin(Replace!(q{
+                        node.value.$alias.connect(&node.slot$i);
+                    }, "$i", i,"$alias", malias));
+                }
+            }
+        }
+
+        // check with each index about insert op
+        foreach(i, x; IndexedByList){
+            /+
+            static if(i != N && is(typeof({ ThisNode* p; 
+                            index!i._DenyInsertion(p,p);}))){
+                enum result = (Replace!(q{
+                        ThisNode* aY; 
+                        bool bY = index!(Y)._DenyInsertion(node,aY);
+                        if (bY) goto denied;
+                }, "Y", i)) ~ ForEachCheckInsert!(i+1, N).result;
+            }kelse enum result = ForEachCheckInsert!(i+1, N).result;
+            +/
+        }
         mixin(ForEachCheckInsert!(0, N).result);
+        // perform insert op on each index
         mixin(ForEachDoInsert!(0, N).result);
         node_count++;
         return node;
