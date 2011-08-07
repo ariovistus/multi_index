@@ -73,7 +73,8 @@ alias MultiIndexContainer!(Node*,
             Heap!("a.order()", "a>b"),
             OrderedUnique!("a.name")
             ),
-        ) 
+        MutableView
+        )
     NodeHeap;
 
 void main(){

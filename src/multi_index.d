@@ -331,19 +331,11 @@ version(PtrHackery){
 }
 
 /// A doubly linked list index.
-struct Sequenced(){
+template Sequenced(){
     enum bool BenefitsFromSignals = false;
     // damn you, ddoc
     /// _
-    struct Inner(ThisContainer,ThisNode, Value, size_t N){
-        // by some forward referencing error or other, (see error11.d)
-        // I can't seem to get a hold of inner in ContainerArgs, but
-        // typeof(exposeType()) seems to work. Desparate times require
-        // desparate measures, I guess
-        static exposeType(){
-            Inner i;
-            return i;
-        }
+    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N){
 
 /**
 Defines the index' primary range, which embodies a
@@ -360,10 +352,10 @@ bidirectional range
                     _front !is _back.index!N.next &&
                     _back !is _front.index!N.prev);
             }
-            @property const(Value) front(){
+            @property ValueView front(){
                 return _front.value;
             }
-            @property const(Value) back(){
+            @property ValueView back(){
                 return _back.value;
             }
 
@@ -494,30 +486,30 @@ Complexity: $(BIGOH 1)
 /**
 Complexity: $(BIGOH 1)
 */ 
-            const(Value) front(){
+            ValueView front(){
                 return _front.value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */ 
-            void front(const(Value) value){
-                _Replace(_front, cast(Value) value);
+            void front(Value value){
+                _Replace(_front, value);
             }
 
 
             /**
              * Complexity: $(BIGOH 1)
              */
-            const(Value) back(){
+            ValueView back(){
                 return _back.value;
             }
 
             /**
              * Complexity: $(BIGOH r(n))
              */
-            void back(const(Value) value){
-                _Replace(_back, cast(Value) value);
+            void back(Value value){
+                _Replace(_back, value);
             }
 
             void _ClearIndex(){
@@ -553,7 +545,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            bool replace(SomeRange)(SomeRange r, Value value)
             if(is(SomeRange == Range) || 
                     is(SomeRange == typeof(retro(Range.init)))){
                 static if(is(SomeRange == Range)){
@@ -561,7 +553,7 @@ Complexity: ??
                 }else{
                     ThisNode* node = r.source._back;
                 }
-                return _Replace(node, cast(Value) value);
+                return _Replace(node, value);
             }
 
             bool _insertFront(ThisNode* node) nothrow
@@ -607,7 +599,7 @@ this index
             size_t insertFront(SomeRange)(SomeRange stuff)
                 if(isInputRange!SomeRange && 
                         isImplicitlyConvertible!(ElementType!SomeRange, 
-                            const(Value)))
+                            ValueView))
                 {
                     if(stuff.empty) return 0;
                     size_t count = 0;
@@ -636,7 +628,7 @@ The number if elements inserted into the index.
 Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
 +/
             size_t insertFront(SomeValue)(SomeValue value)
-                if(isImplicitlyConvertible!(SomeValue, const(Value))){
+                if(isImplicitlyConvertible!(SomeValue, ValueView)){
                     ThisNode* node = _InsertAllBut!N(value);
                     if(!node) return 0;
                     _insertFront(node);
@@ -657,7 +649,7 @@ this index
 +/
             size_t insertBack (SomeRange)(SomeRange stuff)
                 if(isInputRange!SomeRange && 
-                        isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+                        isImplicitlyConvertible!(ElementType!SomeRange, ValueView))
                 {
                     size_t count = 0;
 
@@ -674,7 +666,7 @@ The number if elements inserted into the index.
 Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
 +/
             size_t insertBack(SomeValue)(SomeValue value)
-                if(isImplicitlyConvertible!(SomeValue, const(Value))){
+                if(isImplicitlyConvertible!(SomeValue, ValueView)){
                     ThisNode* node = _InsertAllBut!N(value);
                     if (!node) return 0;
                     _insertBack(node);
@@ -692,7 +684,7 @@ Forwards to insertBack
                 todo? 
                 size_t insertAfter(SomeRange)(SequencedIndex.Range cursor, SomeRange stuff)
                 if(isInputRange!SomeRange && 
-                        isImplicitlyConvertible!(ElementType!SomeRange,const(Value))){
+                        isImplicitlyConvertible!(ElementType!SomeRange,ValueView)){
 
                 }
             insertAfter ( Range, Stuff )
@@ -785,18 +777,10 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 }
 
 /// A random access index.
-struct RandomAccess(){
+template RandomAccess(){
     enum bool BenefitsFromSignals = false;
     /// _
-    struct Inner(ThisContainer,ThisNode, Value, size_t N){
-        // by some forward referencing error or other, (see error11.d)
-        // I can't seem to get a hold of inner in ContainerArgs, but
-        // typeof(exposeType()) seems to work. Desparate times require
-        // desparate measures, I guess
-        static exposeType(){
-            Inner i;
-            return i;
-        }
+    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N){
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,ThisContainer) IndexTuple;
 
@@ -826,7 +810,7 @@ struct RandomAccess(){
                     return c.index!N.ra[s];
                 }
 
-                const(Value) front(){ 
+                ValueView front(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[s].value; 
                 }
@@ -849,7 +833,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
                 @property bool empty()const{ return s >= e; }
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
-                const(Value) back(){ 
+                ValueView back(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[e-1].value;
                 }
@@ -871,7 +855,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 Range save(){ return this; }
 
-                const(Value) opIndex(size_t i){ return c.index!N.ra[i].value; }
+                ValueView opIndex(size_t i){ return c.index!N.ra[i].value; }
             }
 
 /**
@@ -938,28 +922,28 @@ otherwise $(BIGOH 1).
 /**
 Complexity: $(BIGOH 1)
 */
-            const(Value) front(){
+            ValueView front(){
                 return ra[0].value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
-            void front(const(Value) value){
+            void front(ValueView value){
                 _Replace(ra[0], cast(Value) value);
             }
 
 /**
 Complexity: $(BIGOH 1)
 */
-            const(Value) back(){
+            ValueView back(){
                 return ra[node_count-1].value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
-            void back(const(Value) value){
+            void back(ValueView value){
                 _Replace(ra[node_count-1], cast(Value) value);
             }
 
@@ -976,7 +960,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 Preconditions: i < length
 Complexity: $(BIGOH 1)
 */
-            const(Value) opIndex(size_t i){
+            ValueView opIndex(size_t i){
                 enforce(i < length);
                 return ra[i].value;
             }
@@ -986,7 +970,7 @@ Preconditions: i < length
 Returns: the resulting _value at index i
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
-            const(Value) opIndexAssign(const(Value) value, size_t i){
+            ValueView opIndexAssign(ValueView value, size_t i){
                 enforce(i < length);
                 _Replace(ra[i], cast(Value) value);
                 return ra[i].value;
@@ -1033,7 +1017,7 @@ inserts value in the back of this index.
 Complexity: $(BIGOH i(n)), $(BR) amortized $(BIGOH 1) for this index
 */
             size_t insertBack(SomeValue)(SomeValue value)
-            if(isImplicitlyConvertible!(SomeValue, const(Value)))
+            if(isImplicitlyConvertible!(SomeValue, ValueView))
             {
                 ThisNode* n = _InsertAllBut!N(value);
                 if (!n) return 0;
@@ -1049,7 +1033,7 @@ Complexity: $(BIGOH n $(SUB r) * i(n)), $(BR) amortized $(BIGOH n $(SUB r))
 for this index
 */
             size_t insertBack(SomeRange)(SomeRange r)
-            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+            if(isImplicitlyConvertible!(ElementType!SomeRange, ValueView))
             {
                 enum haslen = hasLength!SomeRange;
 
@@ -1104,7 +1088,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            bool replace(SomeRange)(SomeRange r, ValueView value)
             if(is(SomeRange == Range) || 
                     is(SomeRange == typeof(retro(Range.init)))){
                 static if(is(SomeRange == Range)){
@@ -1776,7 +1760,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     /**
      * Element type for the tree
      */
-    alias const(Value) Elem;
+    alias ValueView Elem;
 
     Node   _end;
 
@@ -2024,7 +2008,7 @@ Available for Unique variant.
 Complexity:
 $(BIGOH log(n))
 */
-        const(Value) opIndex(KeyType k){
+        ValueView opIndex(KeyType k){
             Node n; 
             enforce(_find2(k,n));
             return n.value;
@@ -2050,7 +2034,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-    bool replace(Range r, const(Value) value) {
+    bool replace(Range r, ValueView value) {
         ThisNode* node = r.node;
         return _Replace(node, cast(Value) value);
     }
@@ -2565,20 +2549,12 @@ Complexity: $(BIGOH log(n))
 }
 
 /// A red black tree index
-struct Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
+template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
         alias Compare = "a<b"){
 
     enum bool BenefitsFromSignals = true;
 
-    struct Inner(ThisContainer, ThisNode, Value, size_t N){
-        // by some forward referencing error or other, (see error11.d)
-        // I can't seem to get a hold of inner in ContainerArgs, but
-        // typeof(exposeType()) seems to work. Desparate times require
-        // desparate measures, I guess
-        static exposeType(){
-            Inner i;
-            return i;
-        }
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
         alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
 
@@ -2608,15 +2584,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
     enum bool BenefitsFromSignals = true;
 
     /// _
-    struct Inner(ThisContainer, ThisNode, Value, size_t N){
-        // by some forward referencing error or other, (see error11.d)
-        // I can't seem to get a hold of inner in ContainerArgs, but
-        // typeof(exposeType()) seems to work. Desparate times require
-        // desparate measures, I guess
-        static exposeType(){
-            Inner i;
-            return i;
-        }
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,KeyFromValue, Compare, ThisContainer) IndexTuple;
 
@@ -2629,7 +2597,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
-            alias typeof(key((const(Value)).init)) KeyType;
+            alias typeof(key((ValueView).init)) KeyType;
 
             ThisNode*[] _heap;
 
@@ -2689,7 +2657,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     return c.index!N._heap[s];
                 }
 
-                const(Value) front(){ 
+                ValueView front(){ 
                     return c.index!N._heap[s].value; 
                 }
 
@@ -2697,7 +2665,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     s++;
                 }
 
-                const(Value) back(){
+                ValueView back(){
                     return c.index!N._heap[e-1].value; 
                 }
                 void popBack(){ 
@@ -2748,14 +2716,14 @@ Complexity: $(BIGOH 1)
 Returns: the max element in this index
 Complexity: $(BIGOH 1)
 */ 
-            const(Value) front(){
+            ValueView front(){
                 return _heap[0].value;
             }
 /**
 Returns: the back of this index
 Complexity: $(BIGOH 1)
 */ 
-            const(Value) back(){
+            ValueView back(){
                 return _heap[node_count-1].value;
             }
 
@@ -2788,7 +2756,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(Range r, const(Value) value)
+            bool replace(Range r, ValueView value)
             {
                 ThisNode* node = r.node;
                 return _Replace(node, cast(Value) value);
@@ -2842,7 +2810,7 @@ Returns: the number of values added to the container
 Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
 */
             size_t insert(SomeValue)(SomeValue value)
-            if(isImplicitlyConvertible!(SomeValue, const(Value)))
+            if(isImplicitlyConvertible!(SomeValue, ValueView))
             {
                 ThisNode* n = _InsertAllBut!N(value);
                 if(!n) return 0;
@@ -2853,7 +2821,7 @@ Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
             }
 
             size_t insert(SomeRange)(SomeRange r)
-            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value)))
+            if(isImplicitlyConvertible!(ElementType!SomeRange, ValueView))
             {
                 size_t count;
                 foreach(e; r){
@@ -3016,15 +2984,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
     enum bool BenefitsFromSignals = true;
 
     /// _
-    struct Inner(ThisContainer, ThisNode, Value, size_t N){
-        // by some forward referencing error or other, (see error11.d)
-        // I can't seem to get a hold of inner in ContainerArgs, but
-        // typeof(exposeType()) seems to work. Desparate times require
-        // desparate measures, I guess
-        static exposeType(){
-            Inner i;
-            return i;
-        }
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
         alias unaryFun!KeyFromValue key;
         alias typeof(key(Value.init)) KeyType;
         static if (Hash == "??"){
@@ -3039,12 +2999,12 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         alias TypeTuple!(N) NodeTuple;
         alias TypeTuple!(N,KeyFromValue, _Hash, Eq, allowDuplicates, 
-                Sequenced!().Inner!(ThisContainer, ThisNode,Value,N).Range, 
+                Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N).Range, 
                 ThisContainer) IndexTuple;
         // node implementation 
         // could be singly linked, but that would make aux removal more 
         // difficult
-        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, N).NodeMixin 
+        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, ValueView,N).NodeMixin 
             NodeMixin;
 
         enum IndexCtorMixin = Replace!(q{
@@ -3056,7 +3016,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
                 alias Eq, bool allowDuplicates, ListRange, ThisContainer){
             alias unaryFun!KeyFromValue key;
-            alias typeof(key((const(Value)).init)) KeyType;
+            alias typeof(key((ValueView).init)) KeyType;
             alias unaryFun!Hash hash;
             alias binaryFun!Eq eq;
 
@@ -3124,11 +3084,11 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 ThisNode* node;
                 size_t n;
 
-                @property bool empty()const{
+                @property bool empty()/*const*/{
                     return n >= c.index!N.hashes.length;
                 }
 
-                const(Value) front()const{
+                ValueView front()/*const*/{
                     return node.value;
                 }
 
@@ -3177,7 +3137,7 @@ Complexity: $(BIGOH 1)
 Preconditions: !empty
 Complexity: $(BIGOH 1) 
 */ 
-            const(Value) front(){
+            ValueView front(){
                 return _first.value;
             }
     
@@ -3231,7 +3191,7 @@ Available for Unique variant.
 Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
 */
-                const(Value) opIndex ( KeyType k ){
+                ValueView opIndex ( KeyType k ){
                     ThisNode* node;
                     size_t index;
                     enforce(_find(k, node, index));
@@ -3244,7 +3204,7 @@ Reports whether a value exists in the collection such that eq(k, key(value)).
 Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
  */
-            static if(!isImplicitlyConvertible!(KeyType, const(Value))){
+            static if(!isImplicitlyConvertible!(KeyType, ValueView)){
                 bool opBinaryRight(string op)(KeyType k) if (op == "in")
                 {
                     ThisNode* node;
@@ -3258,7 +3218,7 @@ Reports whether value exists in this collection.
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool opBinaryRight(string op)(const(Value) value) if (op == "in")
+            bool opBinaryRight(string op)(ValueView value) if (op == "in")
             {
                 ThisNode* node;
                 size_t index;
@@ -3270,7 +3230,7 @@ Reports whether value exists in this collection
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool contains(const(Value) value){
+            bool contains(ValueView value){
                 ThisNode* node;
                 size_t index;
                 auto r =  _find(key(value), node,index);
@@ -3302,7 +3262,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, const(Value) value)
+            bool replace(SomeRange)(SomeRange r, ValueView value)
             if(is(SomeRange == Range) || is(SomeRange == ListRange)){
                 ThisNode* node = r.node;
                 return _Replace(node, cast(Value) value);
@@ -3520,7 +3480,7 @@ Complexity:
 $(BIGOH i(n)) $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good day)
 */
             size_t insert(SomeValue)(SomeValue value)
-            if(isImplicitlyConvertible!(SomeValue, const(Value))) {
+            if(isImplicitlyConvertible!(SomeValue, ValueView)) {
                 ThisNode* node;
                 size_t index;
                 if(maxLoad(hashes.length) < node_count+1){
@@ -3566,7 +3526,7 @@ $(BIGOH i(n)) $(BR) $(BIGOH n+n $(SUB r)) for this index
 ($(BIGOH n $(SUB r)) on a good day)
 */
             size_t insert(SomeRange)(SomeRange r)
-            if(isImplicitlyConvertible!(ElementType!SomeRange, const(Value))){
+            if(isImplicitlyConvertible!(ElementType!SomeRange, ValueView)){
                 size_t count = 0;
                 static if(hasLength!SomeRange){
                     if(maxLoad(node_count) < node_count+r.length){
@@ -3915,7 +3875,7 @@ n2.index!1 .next = n1;
 n1.index!2 .left = n2;
 ----
 +/
-struct MNode(ThisContainer, IndexedBy, Signals, Value){
+struct MNode(ThisContainer, IndexedBy, Signals, Value, ValueView){
     Value value;
 
     static if(Signals.AllSignals.length > 0){
@@ -3961,12 +3921,7 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(ThisContainer, typeof(this),Value,$N) M$N;
-                    pragma(msg, M$N);
-                    pragma(msg, __traits(allMembers, M$N));
-                    pragma(msg, M$N.NodeTuple);
-                    pragma(msg, "-----------------------------------------------------");
-                    pragma(msg, M$N.NodeMixin);
+                    alias L$N.Inner!(ThisContainer, typeof(this),Value,ValueView,$N) M$N;
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                 },  "$N", N) ~ 
@@ -3977,7 +3932,6 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value){
     }
 
     enum stuff = ForEachIndex!(0, IndexedBy.List).result;
-    pragma(msg, stuff);
     mixin(stuff);
 }
 
@@ -4043,13 +3997,18 @@ struct ContainerArgs(X...){
 /++ 
 The container
 +/
-class MultiIndexContainer(RawValue, Args...){
+class MultiIndexContainer(Value, Args...){
 
     alias ContainerArgs!(Args).IndexedBy IndexedBy;
-
     alias ContainerArgs!(Args).Signals NormSignals;
-    alias MNode!(typeof(this), IndexedBy,NormSignals,Value) ThisNode;
-    alias RawValue Value;
+    alias ContainerArgs!(Args).ConstnessView ConstnessView;
+    static if(is(ConstnessView == ConstView)){
+        alias const(Value) ValueView;
+    }else static if(is(ConstnessView == MutableView)){
+        alias Value ValueView;
+    }else static assert(false);
+    alias MNode!(typeof(this), IndexedBy,NormSignals,Value, ValueView) ThisNode;
+
     /+
     template IndexedByList0(size_t i, stuff...){
         static if(i < IndexedBy.List.length){
@@ -4068,9 +4027,9 @@ class MultiIndexContainer(RawValue, Args...){
     template ForEachCtorMixin(size_t i){
         static if(i < IndexedBy.List.length){
             static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), 
-                                ThisNode,const(Value),i).IndexCtorMixin))){
+                                ThisNode,Value,ValueView,i).IndexCtorMixin))){
                 enum result =  IndexedBy.List[i].Inner!(typeof(this), 
-                        ThisNode,const(Value),i).IndexCtorMixin ~ 
+                        ThisNode,Value, ValueView,i).IndexCtorMixin ~ 
                     ForEachCtorMixin!(i+1).result;
             }else enum result = ForEachCtorMixin!(i+1).result;
         }else enum result = "";
@@ -4155,6 +4114,7 @@ class MultiIndexContainer(RawValue, Args...){
         }
 
         // check with each index about insert op
+        /+
         foreach(i, x; IndexedByList){
             /+
             static if(i != N && is(typeof({ ThisNode* p; 
@@ -4167,6 +4127,7 @@ class MultiIndexContainer(RawValue, Args...){
             }kelse enum result = ForEachCheckInsert!(i+1, N).result;
             +/
         }
+        +/
         mixin(ForEachCheckInsert!(0, N).result);
         // perform insert op on each index
         mixin(ForEachDoInsert!(0, N).result);
@@ -4290,7 +4251,7 @@ denied:
     }
 
     template ForEachAlias(size_t N,size_t index, alias X){
-        alias X.Inner!(ThisNode,Value,N).Index!() Index;
+        alias X.Inner!(ThisNode,Value, ValueView,N).Index!() Index;
         static if(Index.container_aliases.length > index){
             enum aliashere = NAliased!(Index.container_aliases[index][0], 
                     Index.container_aliases[index][1], N);
@@ -4305,7 +4266,7 @@ denied:
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(typeof(this),ThisNode,Value,$N) M$N;
+                    alias L$N.Inner!(typeof(this),ThisNode,Value, ValueView,$N) M$N;
                     mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                     class Index$N{
@@ -4333,7 +4294,7 @@ denied:
                         /+
                         // grr opdispatch not handle this one
                         static if(is(typeof(this.outer.index!($N).opIn(Value.init)))){
-                            auto opIn(const(Value) v){
+                            auto opIn(ValueView v){
                                 return this.outer.index!($N).opIn(v);
                             }
                         }
