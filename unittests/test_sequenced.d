@@ -240,4 +240,30 @@ unittest{
     assert(array(d[]) == [67,-8,1,5,223,-9,-10]);
 }
 
+unittest{
+    class A{
+        int i;
+        int j;
+        double d;
+
+        this(int _i, int _j, double _d){
+            i=_i; j=_j; d=_d;
+        }
+
+        string toString()const{
+            return format("%s %s %s", i,j,d);
+        }
+    }
+
+    alias MultiIndexContainer!(A, IndexedBy!(Sequenced!())) C;
+
+    C c = new C;
+
+    A a = new A(1,2,3.4);
+    c.insert(new A(1,2,3.4));
+    c.insert(new A(4,2,4.2));
+    writeln(c.back().i);
+    foreach(g; c[]){}
+}
+
 void main(){}

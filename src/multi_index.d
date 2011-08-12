@@ -306,7 +306,7 @@ module multi_index;
  *  random access index
  *   insertAfter ? insertBefore ?
  *  fix BitHackery
- *  MutableView
+ *  make MutableView a per index thing?
  *  modify(r, mod, rollback)
  *  tagging
  *  other indeces? 
@@ -486,14 +486,14 @@ Complexity: $(BIGOH 1)
 /**
 Complexity: $(BIGOH 1)
 */ 
-            ValueView front(){
+            @property ValueView front(){
                 return _front.value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */ 
-            void front(Value value){
+            @property void front(Value value){
                 _Replace(_front, value);
             }
 
@@ -501,14 +501,14 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
             /**
              * Complexity: $(BIGOH 1)
              */
-            ValueView back(){
+            @property ValueView back(){
                 return _back.value;
             }
 
             /**
              * Complexity: $(BIGOH r(n))
              */
-            void back(Value value){
+            @property void back(Value value){
                 _Replace(_back, value);
             }
 
@@ -810,7 +810,7 @@ template RandomAccess(){
                     return c.index!N.ra[s];
                 }
 
-                ValueView front(){ 
+                @property ValueView front(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[s].value; 
                 }
@@ -833,7 +833,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
                 @property bool empty()const{ return s >= e; }
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
-                ValueView back(){ 
+                @property ValueView back(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[e-1].value;
                 }
@@ -922,28 +922,28 @@ otherwise $(BIGOH 1).
 /**
 Complexity: $(BIGOH 1)
 */
-            ValueView front(){
+            @property ValueView front(){
                 return ra[0].value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
-            void front(ValueView value){
+            @property void front(ValueView value){
                 _Replace(ra[0], cast(Value) value);
             }
 
 /**
 Complexity: $(BIGOH 1)
 */
-            ValueView back(){
+            @property ValueView back(){
                 return ra[node_count-1].value;
             }
 
 /**
 Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 */
-            void back(ValueView value){
+            @property void back(ValueView value){
                 _Replace(ra[node_count-1], cast(Value) value);
             }
 
@@ -1947,7 +1947,7 @@ Complexity: $(BIGOH 1).
      *
      * Complexity: $(BIGOH log(n))
      */
-    Elem front()
+    @property Elem front()
     {
         return _end.index!N.leftmost.value;
     }
@@ -1957,7 +1957,7 @@ Complexity: $(BIGOH 1).
      *
      * Complexity: $(BIGOH log(n))
      */
-    Elem back()
+    @property Elem back()
     {
         return _end.index!N.prev.value;
     }
@@ -2657,7 +2657,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     return c.index!N._heap[s];
                 }
 
-                ValueView front(){ 
+                @property ValueView front(){ 
                     return c.index!N._heap[s].value; 
                 }
 
@@ -2665,7 +2665,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                     s++;
                 }
 
-                ValueView back(){
+                @property ValueView back(){
                     return c.index!N._heap[e-1].value; 
                 }
                 void popBack(){ 
@@ -2716,14 +2716,14 @@ Complexity: $(BIGOH 1)
 Returns: the max element in this index
 Complexity: $(BIGOH 1)
 */ 
-            ValueView front(){
+            @property ValueView front(){
                 return _heap[0].value;
             }
 /**
 Returns: the back of this index
 Complexity: $(BIGOH 1)
 */ 
-            ValueView back(){
+            @property ValueView back(){
                 return _heap[node_count-1].value;
             }
 
@@ -3088,7 +3088,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                     return n >= c.index!N.hashes.length;
                 }
 
-                ValueView front()/*const*/{
+                @property ValueView front()/*const*/{
                     return node.value;
                 }
 
@@ -3137,7 +3137,7 @@ Complexity: $(BIGOH 1)
 Preconditions: !empty
 Complexity: $(BIGOH 1) 
 */ 
-            ValueView front(){
+            @property ValueView front(){
                 return _first.value;
             }
     
@@ -4290,15 +4290,6 @@ denied:
                         auto opBinaryRight(string op, T...)(T ts){
                             return this.outer.index!($N).opBinaryRight!(op)(ts);
                         }
-
-                        /+
-                        // grr opdispatch not handle this one
-                        static if(is(typeof(this.outer.index!($N).opIn(Value.init)))){
-                            auto opIn(ValueView v){
-                                return this.outer.index!($N).opIn(v);
-                            }
-                        }
-                        +/
 
                         // grr opdispatch not handle this one
                         auto bounds(string bs = "[]", T)(T t1, T t2){
