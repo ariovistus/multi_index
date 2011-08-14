@@ -326,6 +326,7 @@ import std.metastrings: Format, toStringNow;
 import replace: Replace;
 import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf;
 import std.functional: unaryFun, binaryFun;
+import std.string: format;
 version(PtrHackery){
     import std.intrinsic: bt, bts, btr;
 }
@@ -635,10 +636,6 @@ Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
                     return 1;
                 }
 
-            // todo
-            // stableInsert
-            // todo
-            // stableInsertFront
 /++
 Inserts every element of stuff not rejected by another index into the back 
 of the index.
@@ -677,21 +674,6 @@ Complexity: $(BIGOH i(n)); $(BR) $(BIGOH 1) for this index
 Forwards to insertBack
 +/
             alias insertBack insert;
-            /+
-                todo
-                stableInsertBack
-
-                todo? 
-                size_t insertAfter(SomeRange)(SequencedIndex.Range cursor, SomeRange stuff)
-                if(isInputRange!SomeRange && 
-                        isImplicitlyConvertible!(ElementType!SomeRange,ValueView)){
-
-                }
-            insertAfter ( Range, Stuff )
-                stableInsertAfter
-                insertBefore ( Range, Stuff )
-                stableInsertAfter
-            +/
 
             // reckon we'll trust n is somewhere between _front and _back
             void _Remove(ThisNode* n){
@@ -762,17 +744,21 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 return Range(null,null);
             }
 
-            /+
-            todo:
-            stableRemoveAny 
-            stableRemoveFront
-            stableRemoveBack
-            stableLinearRemove
-            +/
-
             void _Check(){
             }
+
+            string toString(){
+                string r = "[";
+                auto rng = opSlice();
+                while(!rng.empty){
+                    r ~= format("%s", rng.front);
+                    rng.popFront();
+                    r ~= rng.empty ? "]" : ", ";
+                }
+                return r;
+            }
         }
+
     }
 }
 
@@ -1009,9 +995,6 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 }
             }
 
-            // todo stableRemoveAny
-            // todo stableRemoveBack
-
 /**
 inserts value in the back of this index.
 Complexity: $(BIGOH i(n)), $(BR) amortized $(BIGOH 1) for this index
@@ -1062,7 +1045,6 @@ Complexity: $(BIGOH n $(SUB r) * i(n)), $(BR) amortized $(BIGOH n $(SUB r))
 for this index
 */
             alias insertBack insert;
-            // todo stableInsertBack 
 
 /**
 Perform mod on r.front and performs any necessary fixups to container's 
@@ -1120,9 +1102,19 @@ for this index
                 _length -= e-s;
                 return Range(this, s, _length);
             }
-            // stableLinearRemove
 
             void _Check(){
+            }
+
+            string toString(){
+                string r = "[";
+                auto rng = opSlice();
+                while(!rng.empty){
+                    r ~= format("%s", rng.front);
+                    rng.popFront();
+                    r ~= rng.empty ? "]" : ", ";
+                }
+                return r;
             }
         }
     }
@@ -2162,7 +2154,7 @@ Complexity: ??
      *
      * Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
      */
-    size_t stableInsert(Stuff)(Stuff stuff) 
+    size_t insert(Stuff)(Stuff stuff) 
         if (isImplicitlyConvertible!(Stuff, Elem))
         out(r){
             version(RBDoChecks) _Check();
@@ -2188,7 +2180,7 @@ Complexity: ??
      * Complexity: $(BIGOH n $(SUB stuff) * i(n)); $(BR) $(BIGOH n $(SUB 
      stuff) * log(n)) for this index
      */
-    size_t stableInsert(Stuff)(Stuff stuff) 
+    size_t insert(Stuff)(Stuff stuff) 
         if(isInputRange!Stuff && 
                 isImplicitlyConvertible!(ElementType!Stuff, Elem))
         out(r){
@@ -2197,13 +2189,10 @@ Complexity: ??
             size_t result = 0;
             foreach(e; stuff)
             {
-                result += stableInsert(e);
+                result += insert(e);
             }
             return result;
         }
-
-    /// ditto
-    alias stableInsert insert;
 
     Node _Remove(Node n)
     out(r){
@@ -2546,6 +2535,17 @@ Complexity: $(BIGOH log(n))
                 throw e;
             }
         }
+
+        string toString(){
+            string r = "[";
+            auto rng = opSlice();
+            while(!rng.empty){
+                r ~= format("%s", (rng.front));
+                rng.popFront();
+                r ~= rng.empty ? "]" : ", ";
+            }
+            return r;
+        }
 }
 
 /// A red black tree index
@@ -2839,8 +2839,6 @@ Complexity: $(BIGOH i(n)); $(BR) $(BIGOH log(n)) for this index
                 sift(node_count);
             }
 
-            // todo stableInsert
-
 /**
 Removes the max element of this index from the container.
 Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
@@ -2861,12 +2859,10 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH log(n)) for this index
                     node_count++;
                 }
             }
-            // todo stableRemoveFront
 /**
 Forwards to removeFront
 */
             alias removeFront removeAny;
-            // todo stableRemoveAny
 
 
 /**
@@ -2879,7 +2875,6 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 _RemoveAllBut!N(node);
                 dealloc(node);
             }
-            /// todo stableRemoveBack
 
             Range remove(R)(R r)
             if (is(R == Range) || is(R == Take!Range)){
@@ -2936,6 +2931,17 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 }
 
                 if (r(n) < node_count) printHeap1(r(n), indent+1);
+            }
+
+            string toString(){
+                string r = "[";
+                auto rng = opSlice();
+                while(!rng.empty){
+                    r ~= format("%s", (rng.front));
+                    rng.popFront();
+                    r ~= rng.empty ? "]" : ", ";
+                }
+                return r;
             }
         }
     }
@@ -3543,7 +3549,6 @@ $(BIGOH i(n)) $(BR) $(BIGOH n+n $(SUB r)) for this index
                 }
                 return count;
             }
-            // todo stableInsert
 
 /** 
 Removes all of r from this container.
@@ -3615,6 +3620,17 @@ $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
                         node = node.index!N.next;
                     }
                 }
+            }
+
+            string toString(){
+                string r = "[";
+                auto rng = opSlice();
+                while(!rng.empty){
+                    r ~= format("%s", (rng.front));
+                    rng.popFront();
+                    r ~= rng.empty ? "]" : ", ";
+                }
+                return r;
             }
         }
     }
@@ -4315,7 +4331,6 @@ denied:
 }
 
 import std.stdio;
-import std.string: format;
 
 int[] arr(Range)(Range r){
     int[] result = new int[](r.length);

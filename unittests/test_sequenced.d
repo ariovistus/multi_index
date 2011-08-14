@@ -1,12 +1,14 @@
 import std.stdio;
+import std.traits;
 import std.range;
 import multi_index;
 
-int[] array(Range)(Range r)
-if(isImplicitlyConvertible!(ElementType!Range, int)){
-    int[] arr;
-    foreach(e; r) arr ~= e;
-    return arr;
+auto array(Range)(Range r) {
+    alias ElementType!Range E;
+    alias Unqual!E RE;
+    RE[] arr;
+    foreach(e; r) arr ~= cast(RE) e;
+    return cast(E[]) arr;
 }
 
 unittest{
@@ -19,6 +21,7 @@ unittest{
     c.insert(1);
     c.insert(2);
     assert(array(c[]) == [1,2,1,2]);
+    assert(c.toString() == "[1, 2, 1, 2]");
     c.insert([45,67,101]);
     assert(array(c[]) == [1,2,1,2,45,67,101]);
     c.insertFront([-1,0,0,8]);
@@ -76,6 +79,11 @@ unittest{
     }
     assert(array(c[]) == [1,5,223,-9,-10,-8,67]);
 
+    c.front = 4;
+    assert(array(c[]) == [4,5,223,-9,-10,-8,67]);
+    c.back = 42;
+    assert(array(c[]) == [4,5,223,-9,-10,-8,42]);
+
 }
 
 unittest{
@@ -101,14 +109,14 @@ unittest{
     assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]);
     c.insertBack(15);
     assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
-    assert(c.front() == -2);
+    assert(c.front == -2);
     c.removeFront();
     assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
-    assert(c.front() == -1);
-    assert(c.back() == 15);
+    assert(c.front == -1);
+    assert(c.back == 15);
     c.removeBack();
     assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
-    assert(c.back() == 14);
+    assert(c.back == 14);
     c.removeAny();
     assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13]);
     auto r = c[];
@@ -250,6 +258,12 @@ unittest{
             i=_i; j=_j; d=_d;
         }
 
+        bool opEquals(Object _a){
+            A a = cast(A) _a;
+            if (!a) return false;
+            return i==a.i&&j==a.j&&d==a.d;
+        }
+
         string toString()const{
             return format("%s %s %s", i,j,d);
         }
@@ -259,11 +273,28 @@ unittest{
 
     C c = new C;
 
-    A a = new A(1,2,3.4);
     c.insert(new A(1,2,3.4));
     c.insert(new A(4,2,4.2));
-    writeln(c.back().i);
+    c.insert(new A(10,20,42));
+    assert(array(c[]) == [new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]);
     foreach(g; c[]){}
+    auto r = c[];
+    r.popFront();
+    assert(array(r.save()) == [new A(4,2,4.2), new A(10,20,42)]);
+    c.modify(r, (ref A a){ a.j = 55; a.d = 3.14; });
+    assert(array(c[]) == [new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    c.insertFront(new A(3,2,1.1));
+    assert(array(c[]) == [new A(3,2,1.1), new A(1,2,3.4), new A(4,55,3.14), 
+            new A(10,20,42)]);
+    c.insertFront([new A(3,2,1.1), new A(4,5,1.2)]);
+    assert(array(c[]) == [new A(3,2,1.1), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    c.front = new A(2,2,2.2);
+    assert(array(c[]) == [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    c.back = cast() c.front;
+    assert(array(c[]) == [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]);
 }
 
 void main(){}

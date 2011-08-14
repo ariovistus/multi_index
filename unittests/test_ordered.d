@@ -20,6 +20,7 @@ unittest{
     c.check();
     c.insert(-1);
     assert(array(c[]) == [-1,0,2]);
+    writeln(c);
     c.insert([5,-5,10,-10]);
     assert(array(c[]) == [-10,-5,-1,0,2,5,10]);
     c.insert(5);
