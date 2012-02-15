@@ -43,12 +43,33 @@ performed on any one index.
 Each index will typically require ($(D N * ptrsize * k)) additional bytes of 
 memory, for some k < 4
 
+$(B Quick Start):
+
+A MultiIndexContainer needs two things: a value type and a list of indeces. Put the list of indeces inside $(D IndexedBy). That way we can give MultiIndexContainer other lists, like signals and tags [later].
+
+-----
+alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) MyContainer;
+
+MyContainer c = new MyContainer;
+-----
+
+Generally you do not perform operations on a MultiIndexContainer, but on one of
+its indeces. MultiIndexContainer does define $(D empty) and $(D length), and 
+all indeces support these operations.
+-----
+// erg, not feeling inspired ..
+auto seq_index = c.get_index!0;
+writeln(seq_index.empty);
+seq_index.insert([1,2,3]); 
+writeln(seq_index.empty);
+writeln(seq_index.front);
+-----
 The following index types are provided:
 $(BOOKTABLE,
 
-$(TR $(TH Index) $(TH Description))
+$(TR $(TH $(D Sequenced)))
 
-$(TR $(TDNW $(D Sequenced)) $(TD Provides a doubly linked list view - exposes 
+$(TR  $(TD Provides a doubly linked list view - exposes 
 fast access to the front and back of the index.  Default insertion inserts to 
 the back of the index $(BR)
 
@@ -77,15 +98,78 @@ c[]
 Returns a bidirectional range iterating over the index.
 )))
 $(TR  $(TD $(D
-c.empty
+c.front
 ))$(TD $(TEXTWITHCOMMAS 
-Tests whether the index is empty. Delegates to the index's container.
+Returns the first element inserted into the index
+)))
+$(TR  $(TD $(D
+c.front = value
+))$(TD $(TEXTWITHCOMMAS 
+Replaces the front element in the index with value
+)))
+$(TR  $(TD $(D
+c.back
+))$(TD $(TEXTWITHCOMMAS 
+Returns the last element inserted into the index
+)))
+$(TR  $(TD $(D
+c.back = value
+))$(TD $(TEXTWITHCOMMAS 
+Replaces the last element in the index with value
+)))
+$(TR  $(TD $(D
+c.modify(r, mod)
+))$(TD $(TEXTWITHCOMMAS 
+Executes $(D mod(r.front)) and performs any necessary fixups to the 
+container's indeces. If the result of mod violates any index' invariant, 
+r.front is removed from the container.
+)))
+$(TR  $(TD $(D
+c.replace(r, value)
+))$(TD $(TEXTWITHCOMMAS 
+Replaces $(D r.front) with $(D value).
+)))
+$(TR  $(TD $(D
+c.insertFront(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the front of the index.
+)))
+$(TR  $(TD $(D
+c.insertBack(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the back of the index.
+)))
+$(TR  $(TD $(D
+c.insert(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the back of the index.
+)))
+$(TR  $(TD $(D
+c.removeFront()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the front of the index.
+)))
+$(TR  $(TD $(D
+c.removeBack()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.removeAny()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.remove(r)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the values in range $(D r) from the container.
 )))
 )
 
 ))
 
-$(TR $(TDNW $(D RandomAccess)) $(TD Provides a random access view - exposes an
+$(TR $(TH $(D RandomAccess)))
+$(TR $(TD Provides a random access view - exposes an
 array-like access to container elements. Default insertion inserts to the back of the index $(BR)
 
 $(TEXTWITHCOMMAS Complexities:)
@@ -100,9 +184,121 @@ $(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS
 r(n) = 1 
 ))))
 
+$(TEXTWITHCOMMAS Supported Operations:)
+$(BOOKTABLE, 
+$(TR  $(TD $(D
+C.Range
+))$(TD $(TEXTWITHCOMMAS 
+RandomAccess Range type.
+)))
+$(TR  $(TD $(D
+c[]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a random access range iterating over the index.
+)))
+$(TR  $(TD $(D
+c[a,b]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a random access range iterating over the subrange of the index.
+)))
+$(TR  $(TD $(D
+c.capacity
+))$(TD $(TEXTWITHCOMMAS 
+Returns the length of the underlying store of the index.
+)))
+$(TR  $(TD $(D
+c.reserve(c)
+))$(TD $(TEXTWITHCOMMAS 
+Ensures sufficient capacity to accommodate $(D c) elements
+)))
+$(TR  $(TD $(D
+c.front
+))$(TD $(TEXTWITHCOMMAS 
+Returns the first element inserted into the index
+)))
+$(TR  $(TD $(D
+c.front = value
+))$(TD $(TEXTWITHCOMMAS 
+Replaces the front element in the index with value
+)))
+$(TR  $(TD $(D
+c.back
+))$(TD $(TEXTWITHCOMMAS 
+Returns the last element inserted into the index
+)))
+$(TR  $(TD $(D
+c.back = value
+))$(TD $(TEXTWITHCOMMAS 
+Replaces the last element in the index with value
+)))
+$(TR  $(TD $(D
+c[i]
+))$(TD $(TEXTWITHCOMMAS 
+Provides const view random access to elements of the index.
+)))
+$(TR  $(TD $(D
+c[i] = value
+))$(TD $(TEXTWITHCOMMAS 
+Sets element $(D i) to $(D value), unless another index refuses it.
+)))
+$(TR  $(TD $(D
+c.swapAt(i,j)
+))$(TD $(TEXTWITHCOMMAS 
+Swaps elements' positions in this index only. This can be done without checks!
+)))
+$(TR  $(TD $(D
+c.modify(r, mod)
+))$(TD $(TEXTWITHCOMMAS 
+Executes $(D mod(r.front)) and performs any necessary fixups to the 
+container's indeces. If the result of mod violates any index' invariant, 
+r.front is removed from the container.
+)))
+$(TR  $(TD $(D
+c.replace(r, value)
+))$(TD $(TEXTWITHCOMMAS 
+Replaces $(D r.front) with $(D value).
+)))
+$(TR  $(TD $(D
+c.insertFront(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the front of the index.
+)))
+$(TR  $(TD $(D
+c.insertBack(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the back of the index.
+)))
+$(TR  $(TD $(D
+c.insert(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff to the back of the index.
+)))
+$(TR  $(TD $(D
+c.removeFront()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the front of the index.
+)))
+$(TR  $(TD $(D
+c.removeBack()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.removeAny()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.linearRemove(r)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the values in range $(D r) from the container.
+)))
+)
+
 ))
 
-$(TR $(TDNW $(D Ordered, OrderedUnique, OrderedNonUnique)) $(TD Provides a 
+$(TR $(TH $(D Ordered, OrderedUnique, OrderedNonUnique))) 
+$(TR $(TD Provides a 
 red black tree view - keeps container elements in order defined by predicates 
 KeyFromValue and Compare. 
 Unique variant will cause the container to refuse 
@@ -120,9 +316,106 @@ $(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS
 r(n) = 1 if the element's position does not change, log(n) otherwise 
 ))))
 
+$(TEXTWITHCOMMAS Supported Operations:)
+$(BOOKTABLE, 
+$(TR  $(TD $(D
+C.Range
+))$(TD $(TEXTWITHCOMMAS 
+Ordered Range type.
+)))
+$(TR  $(TD $(D
+c[]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a bidirectional range iterating over the index.
+)))
+$(TR  $(TD $(D
+c.front
+))$(TD $(TEXTWITHCOMMAS 
+Returns the first element inserted into the index
+)))
+$(TR  $(TD $(D
+c.back
+))$(TD $(TEXTWITHCOMMAS 
+Returns the last element inserted into the index
+)))
+$(TR  $(TD $(D
+k in c
+))$(TD $(TEXTWITHCOMMAS 
+Checks if $(D k) is in the index, where $(D k) is either an element or a key
+)))
+$(TR  $(TD $(D
+c[k]
+))$(TD $(TEXTWITHCOMMAS 
+Provides const view indexed access to elements of the index. Available for Unique variant.
+)))
+$(TR  $(TD $(D
+c.modify(r, mod)
+))$(TD $(TEXTWITHCOMMAS 
+Executes $(D mod(r.front)) and performs any necessary fixups to the 
+container's indeces. If the result of mod violates any index' invariant, 
+r.front is removed from the container.
+)))
+$(TR  $(TD $(D
+c.replace(r, value)
+))$(TD $(TEXTWITHCOMMAS 
+Replaces $(D r.front) with $(D value).
+)))
+$(TR  $(TD $(D
+c.insert(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff into the index.
+)))
+$(TR  $(TD $(D
+c.removeFront()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the front of the index.
+)))
+$(TR  $(TD $(D
+c.removeBack()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.removeAny()
+))$(TD $(TEXTWITHCOMMAS 
+Removes the value at the back of the index.
+)))
+$(TR  $(TD $(D
+c.remove(r)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the values in range $(D r) from the container.
+)))
+$(TR  $(TD $(D
+c.removeKey(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Removes values equivalent to the given values or keys. 
+)))
+$(TR  $(TD $(D
+c.upperBound(k)
+))$(TD $(TEXTWITHCOMMAS 
+Get a range with all elements $(D e) such that $(D e < k)
+)))
+$(TR  $(TD $(D
+c.lowerBound(k)
+))$(TD $(TEXTWITHCOMMAS 
+Get a range with all elements $(D e) such that $(D e > k)
+)))
+$(TR  $(TD $(D
+c.equalRange(k)
+))$(TD $(TEXTWITHCOMMAS 
+Get a range with all elements $(D e) such that $(D e == k)
+)))
+$(TR  $(TD $(D
+c.bounds!("[]")(lo,hi)
+))$(TD $(TEXTWITHCOMMAS 
+Get a range with all elements $(D e) such that $(D lo <= e <= hi). boundaries parameter a la std.random.uniform!
+)))
+)
+
 ))
 
-$(TR $(TDNW $(D Hashed, HashedUnique, HashedNonUnique)) $(TD Provides a 
+$(TR $(TH $(D Hashed, HashedUnique, HashedNonUnique))) 
+$(TR $(TD Provides a 
 hash table view - exposes fast access to every element of the container, 
 given key defined by predicates KeyFromValue, Hash, and Eq.
 Unique variant will cause the container to refuse 
@@ -140,9 +433,76 @@ $(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS
 r(n) = 1 if the element's position does not change, log(n) otherwise 
 ))))
 
+$(TEXTWITHCOMMAS Supported Operations:)
+$(BOOKTABLE, 
+$(TR  $(TD $(D
+C.Range
+))$(TD $(TEXTWITHCOMMAS 
+Hashed Range type.
+)))
+$(TR  $(TD $(D
+c[]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a forward range iterating over the index.
+)))
+$(TR  $(TD $(D
+c.front
+))$(TD $(TEXTWITHCOMMAS 
+Returns the first element in the hash. No, this isn't helpful.
+)))
+$(TR  $(TD $(D
+k in c
+))$(TD $(TEXTWITHCOMMAS 
+Checks if $(D k) is in the index, where $(D k) is either an element or a key
+)))
+$(TR  $(TD $(D
+c.contains(value)
+))$(TD $(TEXTWITHCOMMAS 
+Checks if $(D value) is in the index. $(BR) EMN: Wat? Wat is this doing in here?
+)))
+$(TR  $(TD $(D
+c[k]
+))$(TD $(TEXTWITHCOMMAS 
+Provides const view indexed access to elements of the index. Available for Unique variant.
+)))
+$(TR  $(TD $(D
+c.modify(r, mod)
+))$(TD $(TEXTWITHCOMMAS 
+Executes $(D mod(r.front)) and performs any necessary fixups to the 
+container's indeces. If the result of mod violates any index' invariant, 
+r.front is removed from the container.
+)))
+$(TR  $(TD $(D
+c.replace(r, value)
+))$(TD $(TEXTWITHCOMMAS 
+Replaces $(D r.front) with $(D value).
+)))
+$(TR  $(TD $(D
+c.insert(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff into the index.
+)))
+$(TR  $(TD $(D
+c.remove(r)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the values in range $(D r) from the container.
+)))
+$(TR  $(TD $(D
+c.removeKey(key)
+))$(TD $(TEXTWITHCOMMAS 
+Removes values equivalent to $(D key). 
+)))
+$(TR  $(TD $(D
+c.equalRange(k)
+))$(TD $(TEXTWITHCOMMAS 
+Get a range with all elements $(D e) such that $(D e == k)
+)))
+)
+
 ))
 
-$(TR $(TDNW $(D Heap)) $(TD Provides a max heap view - exposes fast access to 
+$(TR $(TH $(D Heap))) 
+$(TR $(TD Provides a max heap view - exposes fast access to 
 the largest element in the container as defined by predicates KeyFromValue 
 and Compare.
 
@@ -157,6 +517,72 @@ d(n) = log(n)
 $(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
 r(n) = log(n) if the element's position does not change, log(n) otherwise 
 ))))
+$(TEXTWITHCOMMAS Supported Operations:)
+$(BOOKTABLE, 
+$(TR  $(TD $(D
+C.Range
+))$(TD $(TEXTWITHCOMMAS 
+Heap Range type.
+)))
+$(TR  $(TD $(D
+c[]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a bidirectional (EMN: wat? why?!) range iterating over the index.
+)))
+$(TR  $(TD $(D
+c.front
+))$(TD $(TEXTWITHCOMMAS 
+Returns the max element in the heap. 
+)))
+$(TR  $(TD $(D
+c.back
+))$(TD $(TEXTWITHCOMMAS 
+Returns some element of the heap.. probably not the max element...
+)))
+$(TR  $(TD $(D
+c.modify(r, mod)
+))$(TD $(TEXTWITHCOMMAS 
+Executes $(D mod(r.front)) and performs any necessary fixups to the 
+container's indeces. If the result of mod violates any index' invariant, 
+r.front is removed from the container.
+)))
+$(TR  $(TD $(D
+c.replace(r, value)
+))$(TD $(TEXTWITHCOMMAS 
+Replaces $(D r.front) with $(D value).
+)))
+$(TR  $(TD $(D
+c.capacity
+))$(TD $(TEXTWITHCOMMAS 
+Returns the length of the underlying store of the index.
+)))
+$(TR  $(TD $(D
+c.reserve(c)
+))$(TD $(TEXTWITHCOMMAS 
+Ensures sufficient capacity to accommodate $(D c) elements
+)))
+$(TR  $(TD $(D
+c.insert(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Inserts stuff into the index.
+)))
+$(TR  $(TD $(D
+c.removeFront(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the max element in the heap.
+)))
+$(TR  $(TD $(D
+c.removeAny(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the max element in the heap.
+)))
+$(TR  $(TD $(D
+c.removeBack(stuff)
+))$(TD $(TEXTWITHCOMMAS 
+Removes the back element in the heap. $(BR) EMN: what the heck was I smoking?
+)))
+)
+
 ))
 
 )
@@ -320,7 +746,7 @@ constraint? Well, you have two options: remove the offending element
 silently, or remove it loudly (throw an exception). multi_index chooses
 the latter in this case.
 
-Thread Safety:
+$(B Thread Safety):
 
 multi_index is not designed to be used in multithreading.
 Find yourself a relational database.
@@ -923,9 +1349,9 @@ underlying store
             }
 
 /**
-Ensures sufficient capacity to accommodate $(D n) elements.
+Ensures sufficient capacity to accommodate $(D count) elements.
 
-Postcondition: $(D capacity >= n)
+Postcondition: $(D capacity >= count)
 
 Complexity: $(BIGOH ??) if $(D e > capacity),
 otherwise $(BIGOH 1).
@@ -2416,7 +2842,7 @@ Complexity: ??
     }
 
     /**
-     * Get a range from the container with all elements that are > k according
+     * Get a range from the container with all elements that are < k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
@@ -2428,7 +2854,7 @@ Complexity: ??
     }
 
     /**
-     * Get a range from the container with all elements that are < k according
+     * Get a range from the container with all elements that are > k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
