@@ -1,5 +1,10 @@
 /**
-A port of Joaquín M López Muñoz' _multi_index library.
+A port of Joaquín M López Muñoz' 
+<a 
+href="http://www.boost.org/doc/libs/1_48_0/libs/multi_index/doc/index.html"> 
+_multi_index </a>
+library.
+
 
 compilation options: $(BR)
 <b>version=PtrHackery</b> - In boost::_multi_index, Muñoz stores the color of a RB 
@@ -58,6 +63,25 @@ d(n) = 1 for front, back, and auxiliary removal
 $(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
 r(n) = 1 for auxiliary replacement 
 ))))
+
+$(TEXTWITHCOMMAS Supported Operations:)
+$(BOOKTABLE, 
+$(TR  $(TD $(D
+C.Range
+))$(TD $(TEXTWITHCOMMAS 
+Sequenced Range type.
+)))
+$(TR  $(TD $(D
+c[]
+))$(TD $(TEXTWITHCOMMAS 
+Returns a bidirectional range iterating over the index.
+)))
+$(TR  $(TD $(D
+c.empty
+))$(TD $(TEXTWITHCOMMAS 
+Tests whether the index is empty. Delegates to the index's container.
+)))
+)
 
 ))
 
@@ -122,11 +146,18 @@ $(TR $(TDNW $(D Heap)) $(TD Provides a max heap view - exposes fast access to
 the largest element in the container as defined by predicates KeyFromValue 
 and Compare.
 
-Complexity
-
-i(n) = log(n) $(BR)
-d(n) = log(n) $(BR)
-r(n) = 1 if the element's position does not change, log(N) otherwise $(BR)))
+$(TEXTWITHCOMMAS Complexities:)
+$(BOOKTABLE, $(TR $(TH) $(TH))
+$(TR $(TD Insertion) $(TD $(TEXTWITHCOMMAS 
+i(n) = log(n) 
+))) 
+$(TR $(TD Removal) $(TD $(TEXTWITHCOMMAS 
+d(n) = log(n)
+)))
+$(TR $(TD Replacement) $(TD $(TEXTWITHCOMMAS 
+r(n) = log(n) if the element's position does not change, log(n) otherwise 
+))))
+))
 
 )
 
@@ -175,8 +206,8 @@ import std.container;
 alias RedBlackTree!(Tuple!(int,int), "a[0] < b[0]") T1;
 alias RedBlackTree!(Tuple!(int,int)*, "(*a)[1] < (*b)[1]") T2;
 
-T1 tree1;
-T2 tree2;
+T1 tree1 = new T1;
+T2 tree2 = new T2;
 ------
 
 Insertion remains straightforward
@@ -227,13 +258,13 @@ Example:
 import multi_index;
 import std.algorithm: moveAll;
 
-class Value{
+class MyRecord{
     int _i;
 
     @property int i()const{ return i; }
     @property void i(int i1){
         _i = i1;
-        emit(); // MultiIndexContainer is notified that this value's 
+        emit(); // MultiIndexContainer is notified that this record's 
                 // position in indeces may need to be fixed
     }
 
@@ -265,10 +296,10 @@ class Value{
     }
 }
 
-alias MultiIndexContainer!(Value,
+alias MultiIndexContainer!(MyRecord,
     IndexedBy!(OrderedUnique!("a.i")),
     SignalOnChange!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
-                                      // it to use the signal defined in Value.
+                                      // it to use the signal defined in MyRecord.
                                       // you just need to pass in the index number.
 ) MyContainer;
 
@@ -747,7 +778,7 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
             void _Check(){
             }
 
-            string toString(){
+            string toString0(){
                 string r = "[";
                 auto rng = opSlice();
                 while(!rng.empty){
@@ -1106,7 +1137,7 @@ for this index
             void _Check(){
             }
 
-            string toString(){
+            string toString0(){
                 string r = "[";
                 auto rng = opSlice();
                 while(!rng.empty){
@@ -2536,7 +2567,7 @@ Complexity: $(BIGOH log(n))
             }
         }
 
-        string toString(){
+        string toString0(){
             string r = "[";
             auto rng = opSlice();
             while(!rng.empty){
@@ -2924,8 +2955,8 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 if (l(n) < node_count) printHeap1(l(n), indent+1);
                 for(int i = 0; i < indent; i++)
                     write("..");
-                static if(__traits(compiles, (_heap[n].value.toString()))){
-                    writefln("%s (%s) %s", n, _heap[n].value.toString(), _invariant(n) ? "" : "<--- bad!!!");
+                static if(__traits(compiles, (_heap[n].value.toString0()))){
+                    writefln("%s (%s) %s", n, _heap[n].value.toString0(), _invariant(n) ? "" : "<--- bad!!!");
                 }else{
                     writefln("(%s)", _heap[n].value);
                 }
@@ -2933,7 +2964,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 if (r(n) < node_count) printHeap1(r(n), indent+1);
             }
 
-            string toString(){
+            string toString0(){
                 string r = "[";
                 auto rng = opSlice();
                 while(!rng.empty){
@@ -3622,7 +3653,7 @@ $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
                 }
             }
 
-            string toString(){
+            string toString0(){
                 string r = "[";
                 auto rng = opSlice();
                 while(!rng.empty){
@@ -4361,7 +4392,7 @@ struct S1{
         if(this.slot is slot) this.slot = null; 
     }
 
-    string toString()const{
+    string toString0()const{
         return format("%s: %s", s, i);
     }
 }
@@ -4370,7 +4401,8 @@ version(TestMultiIndex)
 void main(){
     alias MultiIndexContainer!(S1, 
             IndexedBy!(Sequenced!(),
-                OrderedUnique!("a.s")),
+                OrderedUnique!("a.s")
+                ),
             SignalOnChange!(ValueSignal!(1))) C;
 
     C i = new C;

@@ -21,7 +21,7 @@ unittest{
     c.insert(1);
     c.insert(2);
     assert(array(c[]) == [1,2,1,2]);
-    assert(c.toString() == "[1, 2, 1, 2]");
+    assert(c.toString0() == "[1, 2, 1, 2]");
     c.insert([45,67,101]);
     assert(array(c[]) == [1,2,1,2,45,67,101]);
     c.insertFront([-1,0,0,8]);
