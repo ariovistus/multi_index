@@ -408,7 +408,7 @@ Get a range with all elements $(D e) such that $(D e == k)
 $(TR  $(TD $(D
 c.bounds!("[]")(lo,hi)
 ))$(TD $(TEXTWITHCOMMAS 
-Get a range with all elements $(D e) such that $(D lo <= e <= hi). boundaries parameter a la std.random.uniform!
+Get a range with all elements $(D e) such that $(D lo <= e <= hi). Boundaries parameter a la <a href="http://www.d-programming-language.org/phobos/std_random.html#uniform">std.random.uniform</a>!
 )))
 )
 
