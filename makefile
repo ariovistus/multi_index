@@ -1,11 +1,8 @@
-DMD = dmd #~/Downloads/dmd2.058/linux/bin64/dmd
+DMD = dmd 
 HERE = $(shell pwd)
 MODEL=64
 DDOCFLAGS=-m$(MODEL) -d -c -o- -version=StdDdoc 
-
-DPLGIT = ~/Downloads/d-programming-language.org
-
-DOCS = std.ddoc #$(DPLGIT)/doc.ddoc $(DPLGIT)/macros.ddoc $(DPLGIT)/std.ddoc
+DOCS = src/std.ddoc 
 
 all: topo test_heap test_sequenced test_ra test_ordered test_hashed
 	
@@ -16,30 +13,22 @@ clean:
 
 html: multi_index.html
 
-multi_index.html: multi_index.d $(DOCS)
-	$(DMD) $(DDOCFLAGS)  $(DOCS) -Df$@ $<
-	#echo '$(HERE)/%.html : %.d $$(DDOC)' > posix.mak
-	#echo -e '\t$(DMD) -c -o- -Df$$@ $$(DDOC) $$<' >> posix.mak
-	#touch posix.mak
-	#cp $< $(DPLGIT)/$<d
-	#cd $(DPLGIT)
-	#make -f posix.mak ./web/multi_index.html
-	#cd $(HERE)
-	#rm posix.mak
-topo: topo.d multi_index.d replace.d
-	$(DMD) -gc -oftopo topo.d multi_index.d replace.d
+multi_index.html: src/multi_index.d src/replace.d $(DOCS)
+	$(DMD) $(DDOCFLAGS) -Df$@ $^
+topo: unittests/topo.d src/multi_index.d src/replace.d
+	$(DMD) -gc -oftopo $^ 
 
-test_heap: multi_index.d replace.d test_heap.d
-	$(DMD) -gc -unittest -oftest_heap multi_index.d replace.d test_heap.d
+test_heap: src/multi_index.d src/replace.d unittests/test_heap.d
+	$(DMD) -gc -unittest -oftest_heap $^
 
-test_sequenced: test_sequenced.d multi_index.d replace.d
-	$(DMD) -gc -unittest -oftest_sequenced test_sequenced.d multi_index.d replace.d
+test_sequenced: unittests/test_sequenced.d src/multi_index.d src/replace.d
+	$(DMD) -gc -unittest -oftest_sequenced $^
 
-test_ra: test_ra.d multi_index.d replace.d
-	$(DMD) -gc -unittest -oftest_ra test_ra.d multi_index.d replace.d
+test_ra: unittests/test_ra.d src/multi_index.d src/replace.d
+	$(DMD) -gc -unittest -oftest_ra $^
 
-test_ordered: test_ordered.d multi_index.d replace.d
-	$(DMD) -gc -unittest -oftest_ordered test_ordered.d multi_index.d replace.d -version=RBDoChecks
+test_ordered: unittests/test_ordered.d src/multi_index.d src/replace.d
+	$(DMD) -gc -unittest -oftest_ordered $^ -version=RBDoChecks
 
-test_hashed: test_hashed.d multi_index.d replace.d
-	$(DMD) -gc -unittest -oftest_hashed test_hashed.d multi_index.d replace.d 
+test_hashed: unittests/test_hashed.d src/multi_index.d src/replace.d
+	$(DMD) -gc -unittest -oftest_hashed $^
