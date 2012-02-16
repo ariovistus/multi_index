@@ -13,7 +13,7 @@ clean:
 
 html: multi_index.html
 
-multi_index.html: src/multi_index.d src/replace.d $(DOCS)
+multi_index.html: src/replace.d src/multi_index.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
 topo: unittests/topo.d src/multi_index.d src/replace.d
 	$(DMD) -gc -oftopo $^ 
