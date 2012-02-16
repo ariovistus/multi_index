@@ -11,7 +11,7 @@ compilation options: $(BR)
 Tree Node in the low bit of one of the pointers with the rationale that on 
 'many' architectures, pointers only point to even addresses.
 
-Source: something somewhere?
+Source: $(LINK https://bitbucket.org/ariovistus/multi_index/src/)
 Macros: 
 TEXTWITHCOMMAS = $0
 Copyright: Red-black tree code copyright (C) 2008- by Steven Schveighoffer. 
@@ -785,7 +785,7 @@ import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf;
 import std.functional: unaryFun, binaryFun;
 import std.string: format;
 version(PtrHackery){
-    import std.intrinsic: bt, bts, btr;
+    import core.bitop: bt, bts, btr;
 }
 
 /// A doubly linked list index.
