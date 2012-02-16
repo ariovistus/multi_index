@@ -4,7 +4,14 @@ import std.metastrings;
 
 template Replace(string base, T...){
     static assert(T.length % 2 == 0);
-    enum Replace = (Replacements!(base, T).result);
+
+    alias NextAt!(base,T) N;
+    static if(N.ti == -1){
+        enum Replace = base;
+    }else{
+        enum Replace = base[0 .. N.at] ~ toStringNow!(T[N.ti+1]) ~ 
+            Replace!(base[N.at + T[N.ti].length .. $], T);
+    }
 }
 
 template NextAt(string base, T...){
@@ -30,13 +37,3 @@ template NextAt(string base, T...){
     }
 }
 
-template Replacements(string base, T...){
-    static assert(T.length % 2 == 0);
-    alias NextAt!(base,T) N;
-    static if(N.ti == -1){
-        enum result = base;
-    }else{
-        enum result = base[0 .. N.at] ~ toStringNow!(T[N.ti+1]) ~ 
-            Replacements!(base[N.at + T[N.ti].length .. $], T).result;
-    }
-}
