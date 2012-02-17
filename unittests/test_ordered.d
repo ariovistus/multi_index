@@ -92,6 +92,24 @@ unittest{
 }
 
 unittest{
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!())) C1;
+    C1 c = new C1;
+    c.insert(iota(20));
+    assert(c.length == 20);
+    assert(array(c[]) == [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]);
+    auto i = c.removeKey(0);
+    assert(i == 1);
+    writeln("zookie");
+    assert(c.length == 19);
+    i = c.removeKey(0);
+    assert(i == 0);
+    assert(c.length == 19);
+    i = c.removeKey(1,0,1,0,2,0,4);
+    assert(array(c[]) == [3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]);
+    assert(i == 3);
+}
+
+unittest{
     // ordered unique, ordered nonunique
     alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), OrderedNonUnique!("-a"))) C1;
 

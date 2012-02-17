@@ -2784,7 +2784,7 @@ Complexity: ??
             count++;
         }
 
-        return count++;
+        return count;
     }
 
     /++ Ditto +/
