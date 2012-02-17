@@ -111,6 +111,9 @@ unittest{
     auto i = c.removeKey(["a","z"]);
     assert(i == 2);
     assert(equal(c[], ["b","c","g"]));
+    i = c.removeKey(map!("a.toLower()")(["C","G"]));
+    assert(i == 2);
+    assert(equal(c[], ["b"]));
     }
     // tests from std.container
     {
@@ -138,6 +141,33 @@ unittest{
     assert(equal(rbt[], [2, 4, 500]));
     assert(rbt.removeKey([cast(short)0, cast(short)500, cast(short)1]) == 1);
     assert(equal(rbt[], [2, 4]));
+    }
+    // end tests from std.container
+    {
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) Ci;
+    auto rbt = new C1;
+    rbt.insert(iota(20));
+
+    auto keys2 = new C1;
+    auto keys = new Ci;
+    keys.insert([17,18]);
+    keys2.insert([1,2]);
+
+    auto r = rbt.bounds!"[]"(4,15);
+    auto i = rbt.removeKey(take(r,3)); 
+    assert(i == 3);
+    writeln(rbt[]);
+    assert(equal(rbt[], [0,1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19]));
+    i = rbt.removeKey(r); 
+    assert(i == 9);
+    assert(equal(rbt[], [0,1,2,3,16,17,18,19]));
+    i = rbt.removeKey(keys[]); 
+    assert(i == 2);
+    assert(equal(rbt[], [0,1,2,3,16,19]));
+    writeln(keys2[]);
+    i = rbt.removeKey(keys2[]); 
+    assert(i == 2);
+    assert(equal(rbt[], [0,3,16,19]));
     }
 }
 
