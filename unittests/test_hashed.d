@@ -1,11 +1,17 @@
 
 import std.stdio;
 import std.range;
+import std.algorithm;
 import multi_index;
+import std.traits;
 
-int[] array(Range)(Range r)
-if(isImplicitlyConvertible!(ElementType!Range, int)){
-    int[] arr;
+int[typeof(cast() ElementType!(Range).init)] set(Range)(Range r) {
+    typeof(return) arr;
+    foreach(e; r) arr[e]=1;
+    return arr;
+}
+ElementType!Range[] array(Range)(Range r) {
+    typeof(return) arr;
     foreach(e; r) arr ~= e;
     return arr;
 }
@@ -21,20 +27,14 @@ unittest{
     assert(1 in c);
     assert(2 in c);
     assert(3 in c);
-    auto a = array(c[]);
-    assert( a == [1,2,3] ||
-            a == [1,3,2] ||
-            a == [2,1,3] ||
-            a == [2,3,1] ||
-            a == [3,1,2] ||
-            a == [3,2,1]);
+    assert(set(c[]) == set([1,2,3]));
     assert(c[1] == 1);
     c.insert([4,5,6]);
     assert(4 in c);
     assert(5 in c);
     assert(6 in c);
     auto t = take(c[], 2);
-    a = array(t);
+    auto a = array(t);
     c.remove(t);
     foreach(x; a) assert(x !in c);
     c.insert(iota(10));
@@ -55,18 +55,13 @@ unittest{
     c.insert(2);
     c.insert(3);
     c.insert(3);
-    assert(1 in c);
-    assert(2 in c);
-    assert(3 in c);
-    auto a = array(c[]);
-    assert(a.length == 4);
+    assert(set(c[]) == set([1,2,3])); // two 3
+    assert(c.length == 4); // two 3
     c.insert([4,5,6]);
-    assert(4 in c);
-    assert(5 in c);
-    assert(6 in c);
-    assert(c.length == 7);
+    assert(set(c[]) == set([1,2,3,4,5,6])); // two 3
+    assert(c.length == 7); // two 3
     auto t = take(c[], 2);
-    a = array(t);
+    auto a = array(t);
     c.remove(t);
     assert(c.length == 5);
     foreach(x; a) assert(x !in c);
@@ -78,9 +73,102 @@ unittest{
     c.remove(r);
     assert(8 !in c);
     assert(c.length == 23);
-    auto sz = c.removeKey(5);
+    auto sz = c.removeKey(5,5);
     assert(5 !in c);
     assert(c.length == 23-sz);
+}
+
+// tests for removeKey
+unittest{
+    alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!())) C1;
+    {
+    C1 c = new C1;
+    c.insert(iota(20));
+    assert(c.length == 20);
+    auto i = c.removeKey(0);
+    assert(i == 1);
+    assert(c.length == 19);
+    i = c.removeKey(0);
+    assert(i == 0);
+    assert(c.length == 19);
+    i = c.removeKey(1,0,1,0,2,0,4);
+    assert(set(c[]) == set([3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]));
+    assert(i == 3);
+    }
+
+    alias MultiIndexContainer!(string, IndexedBy!(HashedUnique!())) C2;
+    {
+    C2 c = new C2;
+    c.insert(["a","g","b","c","z"]);
+    assert(set(c[]) == set(["a","b","c","g","z"]));
+    auto i = c.removeKey(["a","z"]);
+    assert(i == 2);
+    assert(set(c[]) == set(["b","c","g"]));
+    i = c.removeKey(map!("a.toLower()")(["C","G"]));
+    assert(i == 2);
+    assert(equal(c[], ["b"]));
+    }
+    // tests from std.container
+    {
+    auto rbt = new C2;
+    rbt.insert(["hello", "world", "foo", "bar"]);
+    assert(set(rbt[]) == set(["bar", "foo", "hello", "world"]));
+    assert(rbt.removeKey("hello") == 1);
+    assert(rbt.length == 3);
+    assert(rbt.length == 3);
+    assert(set(rbt[]) == set(["bar", "foo", "world"]));
+    assert(rbt.removeKey("hello") == 0);
+    assert(set(rbt[]) == set(["bar", "foo", "world"]));
+    assert(rbt.removeKey("hello", "foo", "bar") == 2);
+    assert(set(rbt[]) == set(["world"]));
+    assert(rbt.removeKey(["", "world", "hello"]) == 1);
+    assert(rbt.empty);
+    }
+    {
+    auto rbt = new C1;
+    rbt.insert([1, 2, 12, 27, 4, 500]);
+    assert(set(rbt[]) == set([1, 2, 4, 12, 27, 500]));
+    assert(rbt.removeKey(1u) == 1);
+    assert(set(rbt[]) == set([2, 4, 12, 27, 500]));
+    assert(rbt.removeKey(cast(byte)1) == 0);
+    assert(set(rbt[]) == set([2, 4, 12, 27, 500]));
+    assert(rbt.removeKey(1, 12u, cast(byte)27) == 2);
+    assert(set(rbt[]) == set([2, 4, 500]));
+    assert(rbt.removeKey([cast(short)0, cast(short)500, cast(short)1]) == 1);
+    assert(set(rbt[]) == set([2, 4]));
+    }
+    // end tests from std.container
+    {
+    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!())) C3;
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) Ci;
+    auto rbt = new C3;
+    rbt.insert([1,2,3,4,4,4,4,5,6,7]);
+
+    assert(set(rbt[]) == set([1,2,3,4,4,4,4,5,6,7]));
+    assert(rbt.length == 10);
+
+    auto keys2 = new C1;
+    auto keys = new Ci;
+    keys.insert([5,6]);
+    keys2.insert([2,3]);
+
+    auto r = rbt.equalRange(4);
+    assert(equal(r, [4,4,4,4]));
+    writeln(r);
+    auto i = rbt.removeKey(take(r,3)); 
+    assert(i == 3,format("i: %s",i));
+    assert(rbt.length == 7); 
+    i = rbt.removeKey(r); 
+    assert(i == 1);
+    assert(set(rbt[]) == set([1,2,3,5,6,7]));
+    i = rbt.removeKey(keys[]); 
+    assert(i == 2);
+    assert(set(rbt[]) == set([1,2,3,7]));
+    writeln(keys2[]);
+    i = rbt.removeKey(keys2[]); 
+    assert(i == 2);
+    assert(equal(rbt[], [1,7]));
+    }
 }
 
 unittest{

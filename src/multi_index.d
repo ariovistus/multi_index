@@ -3070,7 +3070,7 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
                 ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
-            alias typeof(key((ValueView).init)) KeyType;
+            alias typeof(key((Value).init)) KeyType;
 
             ThisNode*[] _heap;
 
@@ -3495,7 +3495,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
                 alias Eq, bool allowDuplicates, ListRange, ThisContainer){
             alias unaryFun!KeyFromValue key;
-            alias typeof(key((ValueView).init)) KeyType;
+            alias typeof(key((Value).init)) KeyType;
             alias unaryFun!Hash hash;
             alias binaryFun!Eq eq;
 
@@ -4057,6 +4057,7 @@ Complexity:
 $(BIGOH n $(SUB k) * d(n)), $(BR)
 $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
 */
+version(OldWay){
             size_t removeKey(KeyType k){
                 auto r = equalRange(k);
                 size_t count = 0;
@@ -4068,6 +4069,51 @@ $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
                 }
                 return count;
             }
+}else{
+
+            size_t removeKey(Keys...)(Keys keys)
+            if(allSatisfy!(implicitlyConverts,Keys)) {
+                KeyType[Keys.length] toRemove;
+                foreach(i,k; keys)
+                    toRemove[i] = k;
+                return removeKey(toRemove[]);
+            }
+
+            size_t removeKey(Key)(Key[] keys)
+            if(isImplicitlyConvertible!(Key, KeyType))
+            out(r){
+                version(RBDoChecks) _Check();
+            }body{
+                ThisNode* node;
+                size_t index;
+                size_t count = 0;
+
+                foreach(k; keys)
+                {
+                    if(!_find(k, node, index)){
+                        continue;
+                    }
+                    _RemoveAll(node);
+                    count++;
+                }
+        
+                return count;
+            }
+    
+            private template implicitlyConverts(Key){
+                enum implicitlyConverts = isImplicitlyConvertible!(Key,KeyType);
+            }
+
+            /++ Ditto +/
+            size_t removeKey(Stuff)(Stuff stuff)
+            if(isInputRange!Stuff &&
+            isImplicitlyConvertible!(ElementType!Stuff, KeyType) &&
+            !isDynamicArray!Stuff) {
+                //We use array in case stuff is a Range from this 
+                // hash - either directly or indirectly.
+                return removeKey(array(stuff));
+            }
+}
 
             void _Check(){
                 bool first = true;
