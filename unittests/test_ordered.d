@@ -20,7 +20,6 @@ unittest{
     c.check();
     c.insert(-1);
     assert(array(c[]) == [-1,0,2]);
-    writeln(c);
     c.insert([5,-5,10,-10]);
     assert(array(c[]) == [-10,-5,-1,0,2,5,10]);
     c.insert(5);
@@ -99,7 +98,6 @@ unittest{
     assert(array(c[]) == [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]);
     auto i = c.removeKey(0);
     assert(i == 1);
-    writeln("zookie");
     assert(c.length == 19);
     i = c.removeKey(0);
     assert(i == 0);

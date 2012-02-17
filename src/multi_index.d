@@ -4773,7 +4773,7 @@ denied:
                             mixin("return this.outer.index!($N)."~s~"(args);");
                         }
                     }
-                    Index$N get_index(size_t n)() if(n == $N){
+                    @property Index$N get_index(size_t n)() if(n == $N){
                         return this.new Index$N();
                     }
                 },  "$N", N) ~ 
