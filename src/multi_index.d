@@ -778,12 +778,13 @@ import std.array;
 import std.range;
 import std.exception: enforce;
 import std.algorithm: find, swap, copy, fill, max, startsWith;
-import std.traits: isImplicitlyConvertible;
+import std.traits: isImplicitlyConvertible, isDynamicArray;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
 import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf;
 import std.functional: unaryFun, binaryFun;
 import std.string: format;
+import std.typetuple: allSatisfy;
 version(PtrHackery){
     import core.bitop: bt, bts, btr;
 }
@@ -2767,8 +2768,19 @@ Complexity: ??
     assert(std.algorithm.equal(rbt[], [5]));
     --------------------
     +/
-    size_t removeKey(U)(U[] keys...)
-    if(isImplicitlyConvertible!(U, KeyType))
+    size_t removeKey(Keys...)(Keys keys)
+    if(allSatisfy!(implicitlyConverts,Keys))
+    out(r){
+        version(RBDoChecks) _Check();
+    }body{
+        KeyType[Keys.length] toRemove;
+        foreach(i,k; keys)
+            toRemove[i] = k;
+        return removeKey(toRemove[]);
+    }
+
+    size_t removeKey(Key)(Key[] keys)
+    if(isImplicitlyConvertible!(Key, KeyType))
     out(r){
         version(RBDoChecks) _Check();
     }body{
@@ -2786,12 +2798,16 @@ Complexity: ??
 
         return count;
     }
+    
+    private template implicitlyConverts(Key){
+        enum implicitlyConverts = isImplicitlyConvertible!(Key,KeyType);
+    }
 
     /++ Ditto +/
     size_t removeKey(Stuff)(Stuff stuff)
     if(isInputRange!Stuff &&
             isImplicitlyConvertible!(ElementType!Stuff, KeyType) &&
-            !is(Stuff == Elem[]))
+            !isDynamicArray!Stuff)
     out(r){
         version(RBDoChecks) _Check();
     }body{
