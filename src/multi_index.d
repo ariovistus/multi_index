@@ -860,6 +860,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
         mixin template NodeMixin(size_t N){
             typeof(this)* next, prev;
 
+            // inserts node between this and this.next
             void insertNext(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
@@ -871,6 +872,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     node.index!N.next = n;
                 }
 
+            // inserts node between this and this.prev
             void insertPrev(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
@@ -3524,7 +3526,14 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 }
                 if(findex >= index) _first = n;
                 if(hashes[index] && hashes[index] != n){
-                    n.index!N.insertNext(hashes[index]);
+                    version(BucketHackery){
+                        auto hack = hashes[index].index!N.prev;
+                        hashes[index].index!N.prev=null;
+                    }
+                    hashes[index].index!N.insertPrev(n);
+                    version(BucketHackery){
+                        n.index!N.prev = hack;
+                    }
                 }
                 hashes[index] = n;
             }

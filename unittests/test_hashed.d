@@ -73,7 +73,7 @@ unittest{
     c.remove(r);
     assert(8 !in c);
     assert(c.length == 23);
-    auto sz = c.removeKey(5,5);
+    auto sz = c.removeKey(5,5,5);
     assert(5 !in c);
     assert(c.length == 23-sz);
 }
@@ -143,6 +143,8 @@ unittest{
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) Ci;
     auto rbt = new C3;
     rbt.insert([1,2,3,4,4,4,4,5,6,7]);
+    assert(rbt.length == 10);
+    assert(rbt.length == count(rbt[]));
 
     assert(set(rbt[]) == set([1,2,3,4,4,4,4,5,6,7]));
     assert(rbt.length == 10);
@@ -154,7 +156,6 @@ unittest{
 
     auto r = rbt.equalRange(4);
     assert(equal(r, [4,4,4,4]));
-    writeln(r);
     auto i = rbt.removeKey(take(r,3)); 
     assert(i == 3,format("i: %s",i));
     assert(rbt.length == 7); 
@@ -164,7 +165,6 @@ unittest{
     i = rbt.removeKey(keys[]); 
     assert(i == 2);
     assert(set(rbt[]) == set([1,2,3,7]));
-    writeln(keys2[]);
     i = rbt.removeKey(keys2[]); 
     assert(i == 2);
     assert(equal(rbt[], [1,7]));
