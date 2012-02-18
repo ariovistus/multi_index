@@ -156,7 +156,6 @@ unittest{
     auto r = rbt.bounds!"[]"(4,15);
     auto i = rbt.removeKey(take(r,3)); 
     assert(i == 3);
-    writeln(rbt[]);
     assert(equal(rbt[], [0,1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19]));
     i = rbt.removeKey(r); 
     assert(i == 9);
@@ -164,10 +163,19 @@ unittest{
     i = rbt.removeKey(keys[]); 
     assert(i == 2);
     assert(equal(rbt[], [0,1,2,3,16,19]));
-    writeln(keys2[]);
     i = rbt.removeKey(keys2[]); 
     assert(i == 2);
     assert(equal(rbt[], [0,3,16,19]));
+    }
+    {
+        alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!())) C5;
+        C5 c = new C5;
+        c.insert([1,2,3,4,4,4,4,5,6,7]);
+        assert(equal(c.equalRange(4), [4,4,4,4]));
+        auto i = c.removeKey(c.equalRange(4));
+        assert(i == 4);
+        assert(equal(c[], [1,2,3,5,6,7]));
+
     }
 }
 
@@ -279,6 +287,18 @@ unittest{
     }
     assert(equal(c[], [60,80]));
     assert(equal(d[], [80,60]));
+}
+
+unittest{
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!())) C1;
+    C1 c = new C1;
+    c.insert([1,2,3,4,4,4,4,5,6,7]);
+    
+    assert(c.length == 10);
+    assert(equal(c[], [1,2,3,4,4,4,4,5,6,7]));
+    assert(equal(c.bounds!"[]"(-1,2), [1,2]));
+    assert(equal(c.bounds!"[)"(-1,2), [1]));
+    assert(equal(c.bounds!"[)"(4,5), [4,4,4,4]));
 }
 
 void main(){}

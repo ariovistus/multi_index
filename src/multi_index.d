@@ -2916,8 +2916,8 @@ Complexity: $(BIGOH log(n))
     Range bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType))
     in{
-        static if(boundaries == "[]") assert(!_less(upper,lower));
-        else assert(_less(lower,upper));
+        static if(boundaries == "[]") assert(!_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+        else assert(_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
     }body{
         static if(boundaries == "[]"){
             return Range(this,_firstGreaterEqual(lower), _firstGreater(upper));
@@ -4691,7 +4691,7 @@ denied:
         }else enum result = "";
     }
 
-    /// disattatch node from all indeces except index N
+    /// disattach node from all indeces except index N
     void _RemoveAllBut(size_t N)(ThisNode* node){
         mixin(ForEachDoRemove!(0, N).result);
         node_count --;

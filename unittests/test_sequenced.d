@@ -1,15 +1,8 @@
 import std.stdio;
+import std.algorithm;
 import std.traits;
 import std.range;
 import multi_index;
-
-auto array(Range)(Range r) {
-    alias ElementType!Range E;
-    alias Unqual!E RE;
-    RE[] arr;
-    foreach(e; r) arr ~= cast(RE) e;
-    return cast(E[]) arr;
-}
 
 unittest{
     // sequenced index only
@@ -20,69 +13,69 @@ unittest{
     c.insert(2);
     c.insert(1);
     c.insert(2);
-    assert(array(c[]) == [1,2,1,2]);
+    assert(equal(c[], [1,2,1,2]));
     assert(c.toString0() == "[1, 2, 1, 2]");
     c.insert([45,67,101]);
-    assert(array(c[]) == [1,2,1,2,45,67,101]);
+    assert(equal(c[], [1,2,1,2,45,67,101]));
     c.insertFront([-1,0,0,8]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101]));
     c.insertBack([13,14]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     c.insertFront(-2);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     c.insertBack(15);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
     assert(c.front() == -2);
     c.removeFront();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
     assert(c.front() == -1);
     assert(c.back() == 15);
     c.removeBack();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     assert(c.back() == 14);
     c.removeAny();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13]));
     auto r = c[];
     popFrontN(r, 6);
     auto t = take(r, 3);
     c.remove(t);
-    assert(array(c[]) == [-1,0,0,8,1,2,67,101,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
     r = c[];
     popFrontN(r, 7);
     c.remove(r);
-    assert(array(c[]) == [-1,0,0,8,1,2,67]);
+    assert(equal(c[], [-1,0,0,8,1,2,67]));
 
     r = c[];
     while(!r.empty){
         if (r.front() < 2) r.removeFront();
         else r.popFront();
     }
-    assert(array(c[]) == [8,2,67]);
+    assert(equal(c[], [8,2,67]));
     r = c[];
     while(!r.empty){
         if (r.back() < 3) r.removeBack();
         else r.popBack();
     }
-    assert(array(c[]) == [8,67]);
+    assert(equal(c[], [8,67]));
     c.insertFront([1,5,223,9,10]);
-    assert(array(c[]) == [1,5,223,9,10,8,67]);
+    assert(equal(c[], [1,5,223,9,10,8,67]));
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
-    assert(array(c[]) == [-1,-5,-223,-9,10,8,-67]);
+    assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
     auto rr = retro(c[]);
     while(!rr.empty){
         if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
-    assert(array(c[]) == [1,5,223,-9,-10,-8,67]);
+    assert(equal(c[], [1,5,223,-9,-10,-8,67]));
 
     c.front = 4;
-    assert(array(c[]) == [4,5,223,-9,-10,-8,67]);
+    assert(equal(c[], [4,5,223,-9,-10,-8,67]));
     c.back = 42;
-    assert(array(c[]) == [4,5,223,-9,-10,-8,42]);
+    assert(equal(c[], [4,5,223,-9,-10,-8,42]));
 
 }
 
@@ -98,63 +91,63 @@ unittest{
     c.insert(2);
     c.insert(1);
     c.insert(2);
-    assert(array(c[]) == [1,2,1,2]);
+    assert(equal(c[], [1,2,1,2]));
     c.insert([45,67,101]);
-    assert(array(c[]) == [1,2,1,2,45,67,101]);
+    assert(equal(c[], [1,2,1,2,45,67,101]));
     c.insertFront([-1,0,0,8]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101]));
     c.insertBack([13,14]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     c.insertFront(-2);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     c.insertBack(15);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
     assert(c.front == -2);
     c.removeFront();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
     assert(c.front == -1);
     assert(c.back == 15);
     c.removeBack();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
     assert(c.back == 14);
     c.removeAny();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13]));
     auto r = c[];
     popFrontN(r, 6);
     auto t = take(r, 3);
     c.remove(t);
-    assert(array(c[]) == [-1,0,0,8,1,2,67,101,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
     r = c[];
     popFrontN(r, 7);
     c.remove(r);
-    assert(array(c[]) == [-1,0,0,8,1,2,67]);
+    assert(equal(c[], [-1,0,0,8,1,2,67]));
 
     r = c[];
     while(!r.empty){
         if (r.front() < 2) r.removeFront();
         else r.popFront();
     }
-    assert(array(c[]) == [8,2,67]);
+    assert(equal(c[], [8,2,67]));
     r = c[];
     while(!r.empty){
         if (r.back() < 3) r.removeBack();
         else r.popBack();
     }
-    assert(array(c[]) == [8,67]);
+    assert(equal(c[], [8,67]));
     c.insertFront([1,5,223,9,10]);
-    assert(array(c[]) == [1,5,223,9,10,8,67]);
+    assert(equal(c[], [1,5,223,9,10,8,67]));
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
-    assert(array(c[]) == [-1,-5,-223,-9,10,8,-67]);
+    assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
     auto rr = retro(c[]);
     while(!rr.empty){
         if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
-    assert(array(c[]) == [1,5,223,-9,-10,-8,67]);
+    assert(equal(c[], [1,5,223,-9,-10,-8,67]));
 
 }
 
@@ -169,83 +162,83 @@ unittest{
     c.insert(2);
     c.insert(1);
     c.insert(2);
-    assert(array(c[]) == [1,2,1,2]);
-    assert(array(d[]) == [1,2,1,2]);
+    assert(equal(c[], [1,2,1,2]));
+    assert(equal(d[], [1,2,1,2]));
     c.insert([45,67,101]);
-    assert(array(c[]) == [1,2,1,2,45,67,101]);
-    assert(array(d[]) == [1,2,1,2,45,67,101]);
+    assert(equal(c[], [1,2,1,2,45,67,101]));
+    assert(equal(d[], [1,2,1,2,45,67,101]));
     c.insertFront([-1,0,0,8]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8]));
     c.insertBack([13,14]);
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13,14]));
     c.insertFront(-2);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13,14,-2]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13,14,-2]));
     c.insertBack(15);
-    assert(array(c[]) == [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13,14,-2,15]);
+    assert(equal(c[], [-2,-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13,14,-2,15]));
     assert(c.front() == -2);
     assert(d.front() == 1);
     c.removeFront();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13,14,15]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14,15]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13,14,15]));
     assert(c.front() == -1);
     assert(d.front() == 1);
     assert(c.back() == 15);
     assert(d.back() == 15);
     c.removeBack();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13,14]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13,14]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13,14]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13,14]));
     assert(c.back() == 14);
     assert(d.back() == 14);
     c.removeAny();
-    assert(array(c[]) == [-1,0,0,8,1,2,1,2,45,67,101,13]);
-    assert(array(d[]) == [1,2,1,2,45,67,101,-1,0,0,8,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13]));
+    assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13]));
     auto r = c[];
     popFrontN(r, 6);
     auto t = take(r, 3);
     c.remove(t);
-    assert(array(c[]) == [-1,0,0,8,1,2,67,101,13]);
-    assert(array(d[]) == [1,2,67,101,-1,0,0,8,13]);
+    assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
+    assert(equal(d[], [1,2,67,101,-1,0,0,8,13]));
     r = c[];
     popFrontN(r, 7);
     c.remove(r);
-    assert(array(c[]) == [-1,0,0,8,1,2,67]);
-    assert(array(d[]) == [1,2,67,-1,0,0,8]);
+    assert(equal(c[], [-1,0,0,8,1,2,67]));
+    assert(equal(d[], [1,2,67,-1,0,0,8]));
 
     r = c[];
     while(!r.empty){
         if (r.front() < 2) r.removeFront();
         else r.popFront();
     }
-    assert(array(c[]) == [8,2,67]);
-    assert(array(d[]) == [2,67,8]);
+    assert(equal(c[], [8,2,67]));
+    assert(equal(d[], [2,67,8]));
     auto r2 = d[];
     while(!r2.empty){
         if (r2.back() < 3) r2.removeBack();
         else r2.popBack();
     }
-    assert(array(c[]) == [8,67]);
-    assert(array(d[]) == [67,8]);
+    assert(equal(c[], [8,67]));
+    assert(equal(d[], [67,8]));
     c.insertFront([1,5,223,9,10]);
-    assert(array(c[]) == [1,5,223,9,10,8,67]);
-    assert(array(d[]) == [67,8,1,5,223,9,10]);
+    assert(equal(c[], [1,5,223,9,10,8,67]));
+    assert(equal(d[], [67,8,1,5,223,9,10]));
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
-    assert(array(c[]) == [-1,-5,-223,-9,10,8,-67]);
-    assert(array(d[]) == [-67,8,-1,-5,-223,-9,10]);
+    assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
+    assert(equal(d[], [-67,8,-1,-5,-223,-9,10]));
     auto rr = retro(c[]);
     while(!rr.empty){
         if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
-    assert(array(c[]) == [1,5,223,-9,-10,-8,67]);
-    assert(array(d[]) == [67,-8,1,5,223,-9,-10]);
+    assert(equal(c[], [1,5,223,-9,-10,-8,67]));
+    assert(equal(d[], [67,-8,1,5,223,-9,-10]));
 }
 
 unittest{
@@ -276,25 +269,25 @@ unittest{
     c.insert(new A(1,2,3.4));
     c.insert(new A(4,2,4.2));
     c.insert(new A(10,20,42));
-    assert(array(c[]) == [new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]);
+    assert(equal(c[], [new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]));
     foreach(g; c[]){}
     auto r = c[];
     r.popFront();
-    assert(array(r.save()) == [new A(4,2,4.2), new A(10,20,42)]);
+    assert(equal(r.save(),[new A(4,2,4.2), new A(10,20,42)]));
     c.modify(r, (ref A a){ a.j = 55; a.d = 3.14; });
-    assert(array(c[]) == [new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    assert(equal(c[], [new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]));
     c.insertFront(new A(3,2,1.1));
-    assert(array(c[]) == [new A(3,2,1.1), new A(1,2,3.4), new A(4,55,3.14), 
-            new A(10,20,42)]);
+    assert(equal(c[], [new A(3,2,1.1), new A(1,2,3.4), new A(4,55,3.14), 
+            new A(10,20,42)]));
     c.insertFront([new A(3,2,1.1), new A(4,5,1.2)]);
-    assert(array(c[]) == [new A(3,2,1.1), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    assert(equal(c[], [new A(3,2,1.1), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]));
     c.front = new A(2,2,2.2);
-    assert(array(c[]) == [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]);
+    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]));
     c.back = cast() c.front;
-    assert(array(c[]) == [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]);
+    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]));
 }
 
 void main(){}
