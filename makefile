@@ -16,6 +16,9 @@ html: multi_index.html
 test: test.d src/replace.d src/multi_index.d
 	dmd -gc -of$@ $^
 
+mru: unittests/mru.d src/replace.d src/multi_index.d
+	dmd -gc -of$@ $^
+
 multi_index.html: src/replace.d src/multi_index.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
 topo: unittests/topo.d src/multi_index.d src/replace.d

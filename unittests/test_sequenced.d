@@ -290,4 +290,65 @@ unittest{
             new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]));
 }
 
+// test rearrangement 
+unittest{
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) C1;
+
+    C1 c = new C1;
+    c.insert(iota(20));
+    auto r = c[];
+    while(r.empty == false){
+        if(r.front() % 2 == 1){
+            c.relocateFront(r,c[]);
+        }else{
+            r.popFront();
+        }
+    }
+    assert(equal(c[], [19,17,15,13,11,9,7,5,3,1,0,2,4,6,8,10,12,14,16,18]));
+
+    c.clear();
+    c.insert(iota(20));
+    r = c[];
+    while(r.empty == false){
+        if(r.front() % 2 == 0){
+            c.relocateFront(r,c[]);
+        }else{
+            r.popFront();
+        }
+    }
+    assert(equal(c[], [18,16,14,12,10,8,6,4,2,0,1,3,5,7,9,11,13,15,17,19]));
+    auto c0 = array(c[]);
+
+    {
+        r = drop(c[],19);
+        auto r2 = drop(c[],4);
+
+        assert(equal(r,[19]));
+        assert(equal(r2,[10,8,6,4,2,0,1,3,5,7,9,11,13,15,17,19]));
+
+        c.relocateFront(r2,r);
+        assert(equal(c[], [18,16,14,12,8,6,4,2,0,1,3,5,7,9,11,13,15,17,10,19]));
+        assert(equal(r,[19]));
+        assert(equal(r2,[8,6,4,2,0,1,3,5,7,9,11,13,15,17,10,19]));
+        c.relocateFront(r2,r);
+        assert(equal(c[], [18,16,14,12,6,4,2,0,1,3,5,7,9,11,13,15,17,10,8,19]));
+        assert(equal(r,[19]));
+        assert(equal(r2,[6,4,2,0,1,3,5,7,9,11,13,15,17,10,8,19]));
+    }
+
+
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(),OrderedUnique!())) C2;
+
+    C2 z = new C2;
+    auto z0 = z.get_index!0;
+    auto z1 = z.get_index!1;
+    z0.insert(c0);
+    assert(equal(z0[],[18,16,14,12,10,8,6,4,2,0,1,3,5,7,9,11,13,15,17,19]));
+    assert(equal(z1[],iota(20)));
+    auto r2 = z1.upperBound(0); // should be called aboveBound
+    auto r3 = z.to_range!0(r2);
+    writeln(r3);
+    assert(equal(r3, [1,3,5,7,9,11,13,15,17,19]));
+}
+
 void main(){}

@@ -820,7 +820,10 @@ bidirectional range
 
             Range save(){ return this; }
 
-            void popFront(){
+            void popFront()
+            in{
+                assert(_front !is _front.index!N.next);
+            }body{
                 _front = _front.index!N.next;
             }
 
@@ -861,6 +864,10 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
             typeof(this)* next, prev;
 
             // inserts node between this and this.next
+            // a,b,c,d = this, this.next, node.prev, node.next; then
+            // old: a <-> b, c <-> node <-> d
+            // new: a <-> node <-> b, c -> node <- d
+            // todo: should node be unlinked? or not allowed if linked?
             void insertNext(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
@@ -873,6 +880,10 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                 }
 
             // inserts node between this and this.prev
+            // a,b,c,d = this, this.prev, node.prev, node.next; then
+            // old: b <-> a, c <-> node <-> d
+            // new: b <-> node <-> a, c -> node <- d
+            // todo: should node be unlinked? or not allowed if linked?
             void insertPrev(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
@@ -884,7 +895,11 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     node.index!N.next = &this;
                 }
 
-            typeof(this)* removeNext() nothrow 
+            // a,b,c = this, this.next, this.next.next; then
+            // old: a <-> b <-> c
+            // new: a <-> c, a <- b -> c
+            // todo: should b be unlinked?
+            typeof(this)* removeNext() nothrow
                 in{
                     assert(next);
                 }body{
@@ -894,7 +909,11 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     return n;
                 }
 
-            typeof(this)* removePrev() nothrow 
+            // a,b,c = this, this.prev, this.prev.prev; then
+            // old: c <-> b <-> a
+            // new: c <-> a, c <- b -> a
+            // todo: should b be unlinked?
+            typeof(this)* removePrev() nothrow
                 in{
                     assert(prev);
                 }body{
@@ -979,6 +998,41 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 
             void clear(){
                 _Clear();
+            }
+/**
+Moves moveme.front to the position before tohere.front and inc both ranges.
+Probably not safe to use either range afterwards, but who knows. 
+Preconditions: moveme and tohere are both ranges of the same container
+Complexity: $(BIGOH 1)
+*/
+            void relocateFront(ref Range moveme, Range tohere)
+            in{
+                assert(moveme.c == tohere.c);
+                assert(moveme.node);
+                assert(tohere.node);
+            }body{
+                ThisNode* m = moveme.node;
+                ThisNode* n = tohere.node;
+
+                moveme.popFront();
+                tohere.popFront();
+
+                if (m is n) return; //??
+                if (m is n.index!N.prev) return; //??
+                if(m is _back){
+                    _back = m.index!N.prev;
+                    _back.index!N.removeNext();
+                    m.index!N.prev = null;
+                }else{
+                    if(m is _front){
+                        _front = m.index!N.next;
+                    }
+                    m.index!N.next.index!N.removePrev();
+                    m.index!N.next = null;
+                    m.index!N.prev = null;
+                }
+                n.index!N.insertPrev(m);
+                if(n is _front) _front = m;
             }
 
 /**
@@ -1216,6 +1270,10 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                     r ~= rng.empty ? "]" : ", ";
                 }
                 return r;
+            }
+
+            private Range fromNode(ThisNode* n){
+                return Range(this, n, this.index!N._back);
             }
         }
 
@@ -1575,6 +1633,18 @@ for this index
                     r ~= rng.empty ? "]" : ", ";
                 }
                 return r;
+            }
+
+            private Range fromNode(ThisNode* n){
+                // Oh NO! linear search!
+                size_t ix = -1;
+                foreach(i,_n; this.index!N.ra){
+                    if(_n is n){
+                        ix = i;
+                        break;
+                    }
+                }
+                return Range(this, ix, this.node_count);
             }
         }
     }
@@ -3021,6 +3091,10 @@ Complexity: $(BIGOH log(n))
             }
             return r;
         }
+        
+        private Range fromNode(ThisNode* n){
+            return Range(this,n, this.index!N._end);
+        }
 }
 
 /// A red black tree index
@@ -3417,6 +3491,10 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                     r ~= rng.empty ? "]" : ", ";
                 }
                 return r;
+            }
+
+            private Range fromNode(ThisNode* n){
+                return Range(this, n.index!N._index, this.node_count);
             }
         }
     }
@@ -4160,6 +4238,11 @@ version(OldWay){
                 }
                 return r;
             }
+
+            private Range fromNode(ThisNode* n){
+                auto ix = hash(key(n.value))%this.index!N.hashes.length;
+                return Range(this, n, ix);
+            }
         }
     }
 }
@@ -4856,6 +4939,26 @@ denied:
 
     enum stuff = (ForEachIndex!(0, IndexedBy.List).result);
     mixin(stuff);
+
+    @property auto to_range(size_t N, Range)(Range r)
+    if(RangeIndexNo!Range != -1){
+        static if(N == RangeIndexNo!Range){
+            return r;
+        }else{
+            return index!N.fromNode(r.node);
+        }
+    }
+
+    private template RangeIndexNo(R){
+        template IndexNoI(size_t i){
+            static if(i == IndexedBy.List.length)
+                enum size_t IndexNoI = -1;
+            else static if(is(index!(i).Range == R))
+                enum size_t IndexNoI = i;
+            else enum IndexNoI = IndexNoI!(i+1);
+        }
+        enum size_t RangeIndexNo = IndexNoI!(0);
+    }
 }
 
 import std.stdio;
