@@ -334,6 +334,12 @@ unittest{
         assert(equal(c[], [18,16,14,12,6,4,2,0,1,3,5,7,9,11,13,15,17,10,8,19]));
         assert(equal(r,[19]));
         assert(equal(r2,[6,4,2,0,1,3,5,7,9,11,13,15,17,10,8,19]));
+        popBackN(r2,5);
+        assert(equal(r2,[6,4,2,0,1,3,5,7,9,11,13]));
+        c.relocateBack(r2,r);
+        assert(equal(c[], [18,16,14,12,6,4,2,0,1,3,5,7,9,11,15,17,10,8,19,13]));
+        assert(equal(r2,[6,4,2,0,1,3,5,7,9,11]));
+        assert(equal(r,[19]));
     }
 
 
@@ -347,7 +353,6 @@ unittest{
     assert(equal(z1[],iota(20)));
     auto r2 = z1.upperBound(0); // should be called aboveBound
     auto r3 = z.to_range!0(r2);
-    writeln(r3);
     assert(equal(r3, [1,3,5,7,9,11,13,15,17,19]));
 }
 

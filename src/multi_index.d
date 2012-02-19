@@ -1011,28 +1011,35 @@ Complexity: $(BIGOH 1)
                 assert(moveme.node);
                 assert(tohere.node);
             }body{
-                ThisNode* m = moveme.node;
-                ThisNode* n = tohere.node;
-
+                ThisNode* m = moveme._front;
+                ThisNode* n = tohere._front;
                 moveme.popFront();
-                tohere.popFront();
-
                 if (m is n) return; //??
                 if (m is n.index!N.prev) return; //??
-                if(m is _back){
-                    _back = m.index!N.prev;
-                    _back.index!N.removeNext();
-                    m.index!N.prev = null;
-                }else{
-                    if(m is _front){
-                        _front = m.index!N.next;
-                    }
-                    m.index!N.next.index!N.removePrev();
-                    m.index!N.next = null;
-                    m.index!N.prev = null;
-                }
+                _Remove(m);
                 n.index!N.insertPrev(m);
                 if(n is _front) _front = m;
+            }
+/**
+Moves moveme.back to the position after tohere.back and dec both ranges.
+Probably not safe to use either range afterwards, but who knows. 
+Preconditions: moveme and tohere are both ranges of the same container
+Complexity: $(BIGOH 1)
+*/
+            void relocateBack(ref Range moveme, Range tohere)
+            in{
+                assert(moveme.c == tohere.c);
+                assert(moveme.node);
+                assert(tohere.node);
+            }body{
+                ThisNode* m = moveme._back;
+                ThisNode* n = tohere._back;
+                moveme.popBack();
+                if (m is n) return; //??
+                if (m is n.index!N.next) return; //??
+                _Remove(m);
+                n.index!N.insertNext(m);
+                if(n is _back) _back = m;
             }
 
 /**
@@ -1197,6 +1204,8 @@ Forwards to insertBack
                     ThisNode* prev = n.index!N.prev;
                     prev.index!N.removeNext();
                     if(n is _back) _back = prev;
+                    n.index!N.next = null;
+                    n.index!N.prev = null;
                 }
             }
 

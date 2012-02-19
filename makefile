@@ -7,7 +7,7 @@ DOCS = src/std.ddoc
 all: topo test_heap test_sequenced test_ra test_ordered test_hashed
 	
 clean: 
-	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed
+	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed mru test
 	rm -f *.o
 	rm -f multi_index.html
 
