@@ -864,13 +864,16 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
             typeof(this)* next, prev;
 
             // inserts node between this and this.next
-            // a,b,c,d = this, this.next, node.prev, node.next; then
-            // old: a <-> b, c <-> node <-> d
-            // new: a <-> node <-> b, c -> node <- d
-            // todo: should node be unlinked? or not allowed if linked?
+            // a,b = this, this.next; then
+            // old: a <-> b, null <- node -> null
+            // new: a <-> node <-> b
             void insertNext(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
+                    assert(node.index!N.prev is null, 
+                            format("node.prev = %x",node.index!N.prev));
+                    assert(node.index!N.next is null,
+                            format("node.next = %x",node.index!N.next));
                 }body{
                     typeof(this)* n = next;
                     next = node;
@@ -879,14 +882,16 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     node.index!N.next = n;
                 }
 
-            // inserts node between this and this.prev
-            // a,b,c,d = this, this.prev, node.prev, node.next; then
-            // old: b <-> a, c <-> node <-> d
-            // new: b <-> node <-> a, c -> node <- d
-            // todo: should node be unlinked? or not allowed if linked?
+            // a,b = this, this.prev; then
+            // old: b <-> a, null <- node -> null
+            // new: b <-> node <-> a
             void insertPrev(typeof(this)* node) nothrow
                 in{
                     assert(node !is null);
+                    assert(node.index!N.prev is null, 
+                            format("node.prev = %x",node.index!N.prev));
+                    assert(node.index!N.next is null,
+                            format("node.next = %x",node.index!N.next));
                 }body{
                     typeof(this)* p = prev;
                     if(p !is null) p.index!N.next = node;
@@ -897,8 +902,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
 
             // a,b,c = this, this.next, this.next.next; then
             // old: a <-> b <-> c
-            // new: a <-> c, a <- b -> c
-            // todo: should b be unlinked?
+            // new: a <-> c, null <- b -> null
             typeof(this)* removeNext() nothrow
                 in{
                     assert(next);
@@ -906,13 +910,13 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     typeof(this)* n = next, nn = n.index!N.next;
                     next = nn;
                     if(nn) nn.index!N.prev = &this;
+                    n.index!N.prev = n.index!N.next = null;
                     return n;
                 }
 
             // a,b,c = this, this.prev, this.prev.prev; then
             // old: c <-> b <-> a
-            // new: c <-> a, c <- b -> a
-            // todo: should b be unlinked?
+            // new: c <-> a, null <- b -> null
             typeof(this)* removePrev() nothrow
                 in{
                     assert(prev);
@@ -920,6 +924,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                     typeof(this)* p = prev, pp = p.index!N.prev;
                     prev = pp;
                     if(pp) pp.index!N.next = &this;
+                    p.index!N.prev = p.index!N.next = null;
                     return p;
                 }
         }
@@ -1080,7 +1085,9 @@ Complexity: ??
 
             bool _insertFront(ThisNode* node) nothrow
                 in{
-                    debug assert(node !is null);
+                    assert(node !is null);
+                    assert(node.index!N.prev is null);
+                    assert(node.index!N.next is null);
                 }body{
                     if(_front is null){
                         debug assert(_back is null);
@@ -1204,8 +1211,6 @@ Forwards to insertBack
                     ThisNode* prev = n.index!N.prev;
                     prev.index!N.removeNext();
                     if(n is _back) _back = prev;
-                    n.index!N.next = null;
-                    n.index!N.prev = null;
                 }
             }
 
@@ -3603,8 +3608,9 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
             // sets n as the first in bucket list at index
             void setFirst(ThisNode* n, size_t index){
+                // first: see if the index of this bucket list is before
+                // _front's bucket list index
                 version(BucketHackery){
-                    n.index!N.prev = cast(ThisNode*) index;
                     size_t findex = !_first?-1:
                         cast(size_t) _first.index!N.prev;
                 }else{
@@ -3614,15 +3620,16 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 if(findex >= index) _first = n;
                 if(hashes[index] && hashes[index] != n){
                     version(BucketHackery){
-                        auto hack = hashes[index].index!N.prev;
+                        // be sure not to give insertPrev any bogus
+                        // links to follow and impale itself with
                         hashes[index].index!N.prev=null;
                     }
                     hashes[index].index!N.insertPrev(n);
-                    version(BucketHackery){
-                        n.index!N.prev = hack;
-                    }
                 }
                 hashes[index] = n;
+                version(BucketHackery){
+                    n.index!N.prev = cast(ThisNode*) index;
+                }
             }
 
             void removeFirst(ThisNode* n){
