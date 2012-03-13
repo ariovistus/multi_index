@@ -2096,6 +2096,14 @@ version(PtrHackery){
         return result;
     }
 
+    @property Node parentmost()
+    {
+        Node result = &this;
+        while(result.index!N._parent !is null)
+            result = result.index!N._parent;
+        return result;
+    }
+
     /**
      * Returns the next valued node in the tree.
      *
@@ -2103,7 +2111,10 @@ version(PtrHackery){
      * there is a valid next node.
      */
     @property Node next()
-    {
+    in{
+        debug assert( &this !is this.index!N.parentmost.index!N.rightmost, 
+            "calling prev on _end.rightmost");
+    }body{
         Node n = &this;
         if(n.index!N.right is null)
         {
@@ -2122,7 +2133,10 @@ version(PtrHackery){
      * assumed that there is a valid previous node.
      */
     @property Node prev()
-    {
+    in{
+        debug assert( &this !is this.index!N.parentmost.index!N.leftmost, 
+            "calling prev on _end.leftmost");
+    }body{
         Node n = &this;
         if(n.index!N.left is null)
         {
@@ -2574,8 +2588,8 @@ Complexity: ??
         _Check();
     }body{
         auto newPosition = key(node.value);
-        Node next = node.index!N.next;
-        Node prev = node.index!N.prev;
+        Node next = _end.index!N.rightmost is node ? null : node.index!N.next;
+        Node prev = _end.index!N.leftmost  is node ? null : node.index!N.prev;
         
         // case 1: key has changed, but relative position hasn't
         bool outOfBounds = (next && next != _end && 
