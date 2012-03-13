@@ -2519,8 +2519,8 @@ Complexity: ??
         auto newPosition = key(node.value);
         if(!_less(newPosition, oldPosition) && 
            !_less(oldPosition, newPosition)) return true;
-        Node next = node.index!N.next;
-        Node prev = node.index!N.prev;
+        Node next = _end.index!N.rightmost is node ? null : node.index!N.next;
+        Node prev = _end.index!N.leftmost  is node ? null : node.index!N.prev;
         
         // case 2: key has changed, but relative position hasn't
         bool outOfBounds = (next && next != _end &&
