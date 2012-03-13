@@ -687,7 +687,7 @@ import std.algorithm: moveAll;
 class MyRecord{
     int _i;
 
-    @property int i()const{ return i; }
+    @property int i()const{ return _i; }
     @property void i(int i1){
         _i = i1;
         emit(); // MultiIndexContainer is notified that this record's 
@@ -727,13 +727,14 @@ alias MultiIndexContainer!(MyRecord,
     SignalOnChange!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
                                       // it to use the signal defined in MyRecord.
                                       // you just need to pass in the index number.
+    MutableView,
 ) MyContainer;
 
 MyContainer c = new MyContainer;
 
 // populate c
 
-Value v = c.first();
+MyRecord v = c.front();
 
 v.i = 22; // v's position in c is automatically fixed
 -------
