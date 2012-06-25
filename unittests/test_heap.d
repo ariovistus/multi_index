@@ -126,5 +126,75 @@ unittest{
     assert(min.empty);
 }
 
+
+unittest{
+
+    class MyRecord{
+        int _i;
+
+        this(int _j){ _i = _j; }
+
+        @property int i()const{ return _i; }
+        @property void i(int i1){
+            _i = i1;
+            emit(); // MultiIndexContainer is notified that this record's
+            // position in indeces may need to be fixed
+        }
+
+        // signal impl - MultiIndexContainer will use these
+        // to connect. In this example, we actually only need
+        // a single slot. For a value type with M signals
+        // (differentiated with mixin aliases), there will be
+        // M slots connected.
+        void delegate()[] slots;
+
+        void connect(void delegate() slot){
+            slots ~= slot;
+        }
+        void disconnect(void delegate() slot){
+            size_t index = slots.length;
+            foreach(i, slot1; slots){
+                if(slot is slot1){
+                    index = i;
+                    moveAll(slots[i+1 .. $], slots[i .. $-1]);
+                    slots.length-=1;
+                    break;
+                }
+            }
+        }
+        void emit(){
+            foreach(slot; slots){
+                slot();
+            }
+        }
+
+        string toString() const{
+            return format("Record(%s)", _i);
+        }
+    }
+
+    alias MultiIndexContainer!(MyRecord,
+            IndexedBy!(Heap!("a.i","a>b")),
+            // this tells MultiIndexContainer that you want
+            // it to use the signal defined in MyRecord.
+            // you just need to pass in the index number.
+            SignalOnChange!(ValueSignal!(0)), 
+            MutableView,
+            ) MyContainer;
+
+    MyContainer c = new MyContainer;
+
+    c.insert(map!(a => new MyRecord(a))(iota(20)));
+
+    writeln(c[]);
+
+    MyRecord v = c.front();
+
+    writefln("changing %s to %s", v._i, 22);
+
+    v.i = 22; // v's position in c is automatically fixed
+    writeln(c[]);
+}
+
 void main(){
 }
