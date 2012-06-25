@@ -751,6 +751,24 @@ $(B Thread Safety):
 multi_index is not designed to be used in multithreading.
 Find yourself a relational database.
 
+$(B Memory Allocation)
+
+In C++, memory allocators are used to control how a container allocates memory. D does not have this (but will soon). Until it does, multi_index will use a
+simple allocator protocol to regulate allocation of container structures. 
+Define a struct with two static methods:
+
+------
+struct MyAllocator{
+ T* allocate(T)(size_t i); // return pointer to chunk of memory containing i*T.sizeof bytes 
+ void deallocate(T)(T* t); // release chunk of memory at t
+}
+------
+Pass the struct type in to MultiIndexContainer:
+------
+alias MultiIndexContainer!(int,IndexedBy!(Sequenced!()), MyAllocator) G;
+------
+Two allocators are predefined in multi_index: $(B GCAllocator) (default), and $(B MallocAllocator)
+
 
  */
 module multi_index;
@@ -777,7 +795,7 @@ version = BucketHackery;
 import std.array;
 import std.range;
 import std.exception: enforce;
-import std.algorithm: find, swap, copy, fill, max, startsWith;
+import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll;
 import std.traits: isImplicitlyConvertible, isDynamicArray;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
@@ -789,12 +807,103 @@ version(PtrHackery){
     import core.bitop: bt, bts, btr;
 }
 
+// stopgap allocator implementation
+// drat: using GCAllocator is probably less efficient than arr.length = i
+// cf GC.extend
+
+struct GCAllocator{
+    static T* allocate(T)(size_t i) {
+        return (new T[](i)).ptr;
+    }
+
+    static void deallocate(T)(T* t) {
+        // gc deallocates when it does. whee.
+    }
+
+}
+
+import std.c.stdlib: malloc, free;
+import std.c.string: memset;
+import core.memory: GC;
+import core.exception: OutOfMemoryError;
+
+struct MallocAllocator{
+    static T* allocate(T)(size_t i) {
+        T* p = cast(T*) malloc(T.sizeof * i);
+        memset(p, 0, T.sizeof * i);
+        if(!p) throw new OutOfMemoryError();
+        GC.addRange(cast(void*) p, T.sizeof * i);
+        return p;
+    }
+    static void deallocate(T)(T* t) {
+        GC.removeRange(cast(void*) t);
+        free(t);
+    }
+}
+
+import std.traits: isIterable, isNarrowString, ForeachType, Unqual;
+// stolen from phobos and modified.
+// when phobos gets real allocators, this hopefully will go away.
+ForeachType!Range[] allocatedArray(Allocator,Range)(Range r)
+if (isIterable!Range && !isNarrowString!Range)
+{
+    alias ForeachType!Range E;
+    static if (hasLength!Range)
+    {
+        if(r.length == 0) return null;
+
+        auto result = Allocator.allocate!E(r.length)[0 .. r.length];
+
+        size_t i = 0;
+        foreach (e; r)
+        {
+            // hacky
+            static if (is(typeof(e.opAssign(e))))
+            {
+                // this should be in-place construction
+                emplace!E(result.ptr + i, e);
+            }
+            else
+            {
+                result[i] = e;
+            }
+            i++;
+        }
+        return result;
+    }
+    else
+    {
+        auto result = Allocator.allocate!(Unqual!E)(1)[0 .. 1];
+        size_t i = 0;
+        foreach (e; r)
+        {
+            result[i] = e;
+            i++;
+            if(i == result.length) {
+                auto nlen = result.length*2+1;
+                auto nresult = Allocator.allocate!(Unqual!E)(nlen)[0 .. nlen];
+                auto rest = moveAll(result, nresult);
+                fill(rest, E.init);
+                Allocator.deallocate(result.ptr);
+                result = nresult;
+            }
+        }
+        return result[0 .. i];
+    }
+}
+
+template IsAllocator(T) {
+    enum bool IsAllocator = is(typeof(T.allocate!int(1)) == int*) &&
+        is(typeof(T.deallocate!int((int*).init)) == void);
+}
+
 /// A doubly linked list index.
-template Sequenced(){
+template Sequenced() {
+    // no memory allocations occur within this index.
     enum bool BenefitsFromSignals = false;
     // damn you, ddoc
     /// _
-    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N){
+    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N, Allocator) {
 
 /**
 Defines the index' primary range, which embodies a
@@ -937,8 +1046,9 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
  // dangit, ddoc, show my single starting underscore!
  /// ThisNode, Value, __InsertAllBut!N, __InsertAll,  __Replace, 
  /// __RemoveAllBut!N, node_count
-        mixin template IndexMixin(size_t N, Range){
+        mixin template IndexMixin(size_t N, Range_0){
             ThisNode* _front, _back;
+            alias Range_0 Range;
 
 /**
 Returns the number of elements in the container.
@@ -986,18 +1096,18 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
             /**
              * Complexity: $(BIGOH 1)
              */
-            @property ValueView back(){
+            @property ValueView back() {
                 return _back.value;
             }
 
             /**
              * Complexity: $(BIGOH r(n))
              */
-            @property void back(Value value){
+            @property void back(Value value) {
                 _Replace(_back, value);
             }
 
-            void _ClearIndex(){
+            void _ClearIndex() {
                 _front = _back = null;
             }
 
@@ -1295,10 +1405,10 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 }
 
 /// A random access index.
-template RandomAccess(){
+template RandomAccess() {
     enum bool BenefitsFromSignals = false;
     /// _
-    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N){
+    template Inner(ThisContainer,ThisNode, Value, ValueView, size_t N, Allocator) {
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,ThisContainer) IndexTuple;
 
@@ -1411,7 +1521,7 @@ Property returning $(D true) if and only if the container has no elements.
 
 Complexity: $(BIGOH 1)
 */
-            @property bool empty(){
+            @property bool empty() {
                 return node_count == 0;
             }
 
@@ -1433,7 +1543,11 @@ otherwise $(BIGOH 1).
 */
             void reserve(size_t count){
                 if(ra.length < count){
-                    ra.length = count;
+                    auto newra = Allocator.allocate!(ThisNode*)(count)[0 .. count];
+                    auto rest = moveAll(ra, newra);
+                    fill(rest, null);
+                    Allocator.deallocate(ra.ptr);
+                    ra = newra;
                 }
             }
 
@@ -1466,7 +1580,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
             }
 
             void _ClearIndex(){
-                fill(ra, cast(ThisNode*) null);
+                fill(ra, (ThisNode*).init);
             }
 
             /// _
@@ -2220,7 +2334,10 @@ version(PtrHackery){
 }
 
 /// ordered index implementation
-mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, alias Compare, ThisContainer){
+mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, alias Compare, ThisContainer) {
+    // this index does do memory allocation
+    // 1) in removeKey, moves stuff to allocated array
+    // 2) somewhere does new Exception(...)
     alias ThisNode* Node;
     alias binaryFun!Compare _less;
     alias unaryFun!KeyFromValue key;
@@ -2524,7 +2641,7 @@ Complexity: $(BIGOH 1).
             }
         }
 
-    void _ClearIndex(){
+    void _ClearIndex() {
         _end.index!N._left = null;
     }
 
@@ -2794,10 +2911,7 @@ Complexity: ??
         auto e = r._end;
         while(b !is e)
         {
-            _RemoveAllBut!N(b);
-            auto ob = b;
-            b = b.index!N.remove(_end);
-            dealloc(ob);
+            b = _RemoveAll!N(b);
         }
         return Range(this, e, _end);
     }
@@ -2824,10 +2938,7 @@ Complexity: ??
 
         while(b != e)
         {
-            _RemoveAllBut!N(b);
-            auto ob = b;
-            b = b.index!N.remove(_end);
-            dealloc(ob);
+            b = _RemoveAll!N(b);
         }
 
         return Range(this, e, _end);
@@ -2859,6 +2970,7 @@ Complexity: ??
     out(r){
         version(RBDoChecks) _Check();
     }body{
+        // stack allocation - is ok
         KeyType[Keys.length] toRemove;
         foreach(i,k; keys)
             toRemove[i] = k;
@@ -2899,7 +3011,13 @@ Complexity: ??
     }body{
         //We use array in case stuff is a Range from this RedBlackTree - either
         //directly or indirectly.
-        return removeKey(array(stuff));
+
+        alias ElementType!Stuff E;
+
+        auto stuffy = allocatedArray!Allocator(stuff);
+        auto res = removeKey(stuffy);
+        Allocator.deallocate(stuffy.ptr);
+        return res;
     }
 
     // find the first node where the value is > k
@@ -3054,22 +3172,26 @@ Complexity: $(BIGOH log(n))
                 if(n is null)
                     return 1;
                 if(n.index!N.parent.index!N.left !is n && n.index!N.parent.index!N.right !is n)
+                    // memory allocation! ..how to fix?
                     throw new Exception("Node at path " ~ path ~ " has inconsistent pointers");
                 Node next = n.index!N.next;
                 static if(allowDuplicates)
                 {
                     if(next !is _end && _less(key(next.value), key(n.value)))
+                        // memory allocation! ..how to fix?
                         throw new Exception("ordering invalid at path " ~ path);
                 }
                 else
                 {
                     if(next !is _end && !_less(key(n.value), key(next.value)))
+                        // memory allocation! ..how to fix?
                         throw new Exception("ordering invalid at path " ~ path);
                 }
                 if(n.index!N.color == Color.Red)
                 {
                     if((n.index!N.left !is null && n.index!N.left.index!N.color == Color.Red) ||
                             (n.index!N.right !is null && n.index!N.right.index!N.color == Color.Red))
+                        // memory allocation! ..how to fix?
                         throw new Exception("Node at path " ~ path ~ " is red with a red child");
                 }
 
@@ -3079,6 +3201,7 @@ Complexity: $(BIGOH log(n))
                 {
                     writeln("bad tree at:");
                     printTree(n);
+                    // memory allocation! ..how to fix?
                     throw new Exception("Node at path " ~ path ~ " has different number of black nodes on left and right paths");
                 }
                 return l + (n.index!N.color == Color.Black ? 1 : 0);
@@ -3113,16 +3236,16 @@ Complexity: $(BIGOH log(n))
 
 /// A red black tree index
 template Ordered(bool allowDuplicates = false, alias KeyFromValue="a", 
-        alias Compare = "a<b"){
+        alias Compare = "a<b") {
 
     enum bool BenefitsFromSignals = true;
 
-    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N, Allocator){
         alias TypeTuple!(N, allowDuplicates, KeyFromValue, Compare,ThisContainer) IndexTuple;
         alias OrderedIndex IndexMixin;
 
         enum IndexCtorMixin = Replace!(q{
-            index!($N)._end = alloc();
+            index!($N)._end = Allocator.allocate!ThisNode(1);
         }, "$N", N);
         /// node implementation (ish)
         alias TypeTuple!(N) NodeTuple;
@@ -3131,23 +3254,24 @@ template Ordered(bool allowDuplicates = false, alias KeyFromValue="a",
 }
 
 /// A red black tree index
-template OrderedNonUnique(alias KeyFromValue="a", alias Compare = "a<b"){
+template OrderedNonUnique(alias KeyFromValue="a", alias Compare = "a<b") {
     alias Ordered!(true, KeyFromValue, Compare) OrderedNonUnique;
 }
 /// A red black tree index
-template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b"){
+template OrderedUnique(alias KeyFromValue="a", alias Compare = "a<b") {
     alias Ordered!(false, KeyFromValue, Compare) OrderedUnique;
 }
 
 // end RBTree impl
 
 /// a max heap index
-template Heap(alias KeyFromValue = "a", alias Compare = "a<b"){
+template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
+    // this index allocates the heap array
 
     enum bool BenefitsFromSignals = true;
 
     /// _
-    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N, Allocator) {
         alias TypeTuple!() NodeTuple;
         alias TypeTuple!(N,KeyFromValue, Compare, ThisContainer) IndexTuple;
 
@@ -3291,7 +3415,7 @@ Complexity: $(BIGOH 1)
             }
 
             void _ClearIndex(){
-                fill(_heap, cast(ThisNode*) null);
+                fill(_heap, (ThisNode*).init);
             }
 /**
 ??
@@ -3364,7 +3488,11 @@ otherwise $(BIGOH 1).
 */
             void reserve(size_t count){
                 if(_heap.length < count){
-                    _heap.length = count;
+                    auto newheap = Allocator.allocate!(ThisNode*)(count)[0 .. count];
+                    auto rest = moveAll(_heap, newheap);
+                    fill(rest, (ThisNode*).init);
+                    Allocator.deallocate(_heap.ptr);
+                    _heap = newheap;
                 }
             }
 /**
@@ -3435,8 +3563,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
 */
             void removeBack(){
                 ThisNode* node = _heap[node_count-1];
-                _RemoveAllBut!N(node);
-                dealloc(node);
+                _RemoveAll(node);
             }
 
             Range remove(R)(R r)
@@ -3552,16 +3679,17 @@ static if(size_t.sizeof == 4){
 /// Hash(key) = hash of type size_t 
 /// Eq(key1, key2) determines equality of key1, key2
 template Hashed(bool allowDuplicates = false, alias KeyFromValue="a", 
-        alias Hash="??", alias Eq="a==b"){
+        alias Hash="??", alias Eq="a==b") {
+    // this index allocates the table, and an array in removeKey
 
     enum bool BenefitsFromSignals = true;
 
     /// _
-    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N){
+    template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N, Allocator) {
         alias unaryFun!KeyFromValue key;
         alias typeof(key(Value.init)) KeyType;
-        static if (Hash == "??"){
-            static if(is(typeof(KeyType.init.toHash()))){
+        static if (Hash == "??") {
+            static if(is(typeof(KeyType.init.toHash()))) {
                 enum _Hash = "a.toHash()";
             }else{
                 enum _Hash = "typeid(a).getHash(&a)";
@@ -3572,12 +3700,12 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         alias TypeTuple!(N) NodeTuple;
         alias TypeTuple!(N,KeyFromValue, _Hash, Eq, allowDuplicates, 
-                Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N).Range, 
+                Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N,Allocator).Range, 
                 ThisContainer) IndexTuple;
         // node implementation 
         // could be singly linked, but that would make aux removal more 
         // difficult
-        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, ValueView,N).NodeMixin 
+        alias Sequenced!().Inner!(ThisContainer, ThisNode, Value, ValueView,N,Allocator).NodeMixin 
             NodeMixin;
 
         enum IndexCtorMixin = Replace!(q{
@@ -4000,6 +4128,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
             @property size_t capacity(){
                 return hashes.length;
             }
+
             void reserve(size_t n){
                 if (n <= maxLoad(hashes.length)) return;
                 size_t i = 0;
@@ -4015,7 +4144,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 }
 
                 auto r = opSlice();
-                auto newhashes = new ThisNode*[](primes[i]);
+                auto newhashes = Allocator.allocate!(ThisNode*)(primes[i])[0 .. primes[i]];
                 ThisNode* newfirst;
                 size_t newfindex = -1;
                 while(!r.empty){
@@ -4050,6 +4179,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                     }
                 }
 
+                Allocator.deallocate(hashes.ptr);
                 hashes = newhashes;
                 _first = newfirst;
             }
@@ -4214,7 +4344,10 @@ version(OldWay){
             !isDynamicArray!Stuff) {
                 //We use array in case stuff is a Range from this 
                 // hash - either directly or indirectly.
-                return removeKey(array(stuff));
+                auto stuffy = allocatedArray!Allocator(stuff);
+                auto res = removeKey(stuffy);
+                Allocator.deallocate(stuffy.ptr);
+                return res;
             }
 }
 
@@ -4518,22 +4651,22 @@ n2.index!1 .next = n1;
 n1.index!2 .left = n2;
 ----
 +/
-struct MNode(ThisContainer, IndexedBy, Signals, Value, ValueView){
+struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
     Value value;
 
-    static if(Signals.AllSignals.length > 0){
+    static if(Signals.AllSignals.length > 0) {
         // notifications need to go somewhere
         ThisContainer container;
 
         /// generate slots
-        template ForEachSignal(size_t i){
-            static if(i < Signals.Mixin2Index.length){
+        template ForEachSignal(size_t i) {
+            static if(i < Signals.Mixin2Index.length) {
                 alias Signals.Mixin2Index[i] Mixin2Index;
 
-                template ForEachIndex2(size_t j){
-                    static if(j < Mixin2Index.Indeces.length){
+                template ForEachIndex2(size_t j) {
+                    static if(j < Mixin2Index.Indeces.length) {
                         enum result = Replace!(q{
-                            if(!container.index!($i)._NotifyChange(&this)){
+                            if(!container.index!($i)._NotifyChange(&this)) {
                                 goto denied;
                             }
                         }, "$i", Mixin2Index.Indeces[j]) ~ ForEachIndex2!(j+1).result;
@@ -4564,7 +4697,7 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value, ValueView){
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(ThisContainer, typeof(this),Value,ValueView,$N) M$N;
+                    alias L$N.Inner!(ThisContainer, typeof(this),Value,ValueView,$N, Allocator) M$N;
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                 },  "$N", N) ~ 
@@ -4581,25 +4714,29 @@ struct MNode(ThisContainer, IndexedBy, Signals, Value, ValueView){
 struct ConstView{}
 struct MutableView{}
 
-auto CheckArgs(X...)(){
+auto CheckArgs(X...)() {
         size_t numIndexedBy = 0, ixIndexedBy = -1;
         size_t numSignalOnChanged = 0, ixSignalOnChanged = -1;
         size_t numViews = 0, ixView = -1;
+        size_t numAllocators = 0, ixAllocator = -1;
         foreach(i,x; X){
             // todo: find a way to test if x is an instatiation of template IndexedBy
             static if(x.stringof.startsWith("IndexedBy") &&
-                    __traits(compiles, x.List)){
+                    __traits(compiles, x.List)) {
                 numIndexedBy++;
                 assert(x.List.length > 0, "MultiIndexContainer requires"
                         " at least one index");
                 ixIndexedBy = i;
             }else static if(x.stringof.startsWith("SignalOnChange") &&
-                    true){
+                    true) {
                 numSignalOnChanged++;
                 ixSignalOnChanged = i;
-            }else static if(is(x == MutableView) || is(x == ConstView)){
+            }else static if(is(x == MutableView) || is(x == ConstView)) {
                 numViews++;
                 ixView = i;
+            }else static if(IsAllocator!(x)) {
+                numAllocators++;
+                ixAllocator = i;
             }else{
                 assert(false, Format!(
                             "Invalid argument passed to MultiIndexContainer"
@@ -4612,8 +4749,9 @@ auto CheckArgs(X...)(){
                 "specifications are not allowed");
         assert(numViews <= 1, "Multiple Constness Views "
                 "are not allowed");
+        assert(numAllocators <= 1, "Multiple Allocators are not allowed");
 
-        return [ixIndexedBy, ixSignalOnChanged, ixView];
+        return [ixIndexedBy, ixSignalOnChanged, ixView, ixAllocator];
 }
 struct ContainerArgs(X...){
 
@@ -4626,31 +4764,39 @@ struct ContainerArgs(X...){
     }else{
         alias typeof(X[ixs[1]].Inner!(IndexedBy).exposeType()) Signals;
         // @@@BUG@@@ following gives forward reference error
+        // actually, this seems to have been fixed
         //alias X[ixs[1]] Signals0;
         //alias Signals0.Inner!(IndexedBy) Signals;
     }
 
-    static if(ixs[2] ==  -1){
+    static if(ixs[2] ==  -1) {
         alias ConstView ConstnessView;
     }else{
         alias X[ixs[2]] ConstnessView;
+    }
+
+    static if(ixs[3] == -1) {
+        alias GCAllocator Allocator;
+    }else {
+        alias X[ixs[3]] Allocator;
     }
 }
 
 /++ 
 The container
 +/
-class MultiIndexContainer(Value, Args...){
+class MultiIndexContainer(Value, Args...) {
 
     alias ContainerArgs!(Args).IndexedBy IndexedBy;
     alias ContainerArgs!(Args).Signals NormSignals;
     alias ContainerArgs!(Args).ConstnessView ConstnessView;
+    alias ContainerArgs!(Args).Allocator Allocator;
     static if(is(ConstnessView == ConstView)){
         alias const(Value) ValueView;
     }else static if(is(ConstnessView == MutableView)){
         alias Value ValueView;
     }else static assert(false);
-    alias MNode!(typeof(this), IndexedBy,NormSignals,Value, ValueView) ThisNode;
+    alias MNode!(typeof(this), IndexedBy,Allocator,NormSignals,Value, ValueView) ThisNode;
 
     /+
     template IndexedByList0(size_t i, stuff...){
@@ -4670,9 +4816,9 @@ class MultiIndexContainer(Value, Args...){
     template ForEachCtorMixin(size_t i){
         static if(i < IndexedBy.List.length){
             static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), 
-                                ThisNode,Value,ValueView,i).IndexCtorMixin))){
+                                ThisNode,Value,ValueView,i,Allocator).IndexCtorMixin))){
                 enum result =  IndexedBy.List[i].Inner!(typeof(this), 
-                        ThisNode,Value, ValueView,i).IndexCtorMixin ~ 
+                        ThisNode,Value, ValueView,i,Allocator).IndexCtorMixin ~ 
                     ForEachCtorMixin!(i+1).result;
             }else enum result = ForEachCtorMixin!(i+1).result;
         }else enum result = "";
@@ -4680,11 +4826,6 @@ class MultiIndexContainer(Value, Args...){
 
     this(){
         mixin(ForEachCtorMixin!(0).result);
-    }
-
-    /// specify how to allocate a node
-    ThisNode* alloc(){
-        return new ThisNode;
     }
 
     void dealloc(ThisNode* node){
@@ -4703,6 +4844,15 @@ class MultiIndexContainer(Value, Args...){
             }
         }
         object.clear(node);
+        Allocator.deallocate(node);
+    }
+
+    new(size_t sz) {
+        void* p = Allocator.allocate!void(sz);
+        return p;
+    }
+    delete(void* p) {
+        Allocator.deallocate(p);
     }
 
     template ForEachCheckInsert(size_t i, size_t N){
@@ -4736,7 +4886,7 @@ class MultiIndexContainer(Value, Args...){
     }
 
     ThisNode* _InsertAllBut(size_t N)(Value value){
-        ThisNode* node = alloc();
+        ThisNode* node = Allocator.allocate!(ThisNode)(1);
         node.value = value;
 
         // connect signals to slots
@@ -4798,10 +4948,19 @@ denied:
 
     /// disattach node from all indeces.
     /// @@@BUG@@@ cannot pass length directly to _RemoveAllBut
-    void _RemoveAll(ThisNode* node){
-        enum _grr_bugs = IndexedBy.List.length;
-        _RemoveAllBut!(_grr_bugs)(node);
+    auto _RemoveAll(size_t N = -1)(ThisNode* node){
+        static if(N == -1) {
+            enum _grr_bugs = IndexedBy.List.length;
+            _RemoveAllBut!(_grr_bugs)(node);
+        }else {
+            _RemoveAllBut!N(node);
+            auto res = index!N._Remove(node);
+        }
         dealloc(node);
+
+        static if(N != -1) {
+            return res;
+        }
     }
 
     template ForEachIndexPosition(size_t i){
@@ -4894,7 +5053,7 @@ denied:
     }
 
     template ForEachAlias(size_t N,size_t index, alias X){
-        alias X.Inner!(ThisNode,Value, ValueView,N).Index!() Index;
+        alias X.Inner!(ThisNode,Value, ValueView,N,Allocator).Index!() Index;
         static if(Index.container_aliases.length > index){
             enum aliashere = NAliased!(Index.container_aliases[index][0], 
                     Index.container_aliases[index][1], N);
@@ -4909,7 +5068,7 @@ denied:
             enum result = 
                 Replace!(q{
                     alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(typeof(this),ThisNode,Value, ValueView,$N) M$N;
+                    alias L$N.Inner!(typeof(this),ThisNode,Value, ValueView,$N,Allocator) M$N;
                     mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
                     class Index$N{
@@ -4956,22 +5115,28 @@ denied:
     enum stuff = (ForEachIndex!(0, IndexedBy.List).result);
     mixin(stuff);
 
+    /+
     @property auto to_range(size_t N, Range)(Range r)
-    if(RangeIndexNo!Range != -1){
+    if(RangeIndexNo!RangeY != -1){
         static if(N == RangeIndexNo!Range){
             return r;
         }else{
             return index!N.fromNode(r.node);
         }
     }
+    +/
 
     private template RangeIndexNo(R){
         template IndexNoI(size_t i){
-            static if(i == IndexedBy.List.length)
+            static if(i == IndexedBy.List.length){
                 enum size_t IndexNoI = -1;
-            else static if(is(index!(i).Range == R))
+            }else static if(is(index!(i).Range == R)){
+                pragma(msg, Format!("%s is index!%s.Range (%s)",R.stringof,i, (index!(i).Range).stringof));
                 enum size_t IndexNoI = i;
-            else enum IndexNoI = IndexNoI!(i+1);
+            }else{
+                pragma(msg, Format!("%s is not index!%s.Range (%s)",R.stringof,i,(index!(i).Range).stringof));
+                enum IndexNoI = IndexNoI!(i+1);
+            }
         }
         enum size_t RangeIndexNo = IndexNoI!(0);
     }

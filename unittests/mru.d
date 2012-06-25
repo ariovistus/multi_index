@@ -16,7 +16,7 @@ class MRU(T){
         if(!itemlist.get_index!0 .insert(t)){
             auto r = itemlist.get_index!1 .equalRange(t);
             /// @@@BUG@@@ issue 6475 prevents this code from working
-            ItemList.index!0 .Range r2 = itemlist.to_range!0(r);
+            /*ItemList.index!0 .Range*/auto r2 = itemlist.to_range!0(r);
             itemlist.get_index!0 .relocate(r2, itemlist[]);
         }else if(itemlist.length > max_num_items){
             itemlist.removeBack();
