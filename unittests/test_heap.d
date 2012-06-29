@@ -10,9 +10,11 @@ if(isImplicitlyConvertible!(ElementType!Range, int)){
     foreach(e; r) arr ~= e;
     return arr;
 }
+
+template Testies(Allocator) {
 unittest{
     // lone heap index
-    alias MultiIndexContainer!(int, IndexedBy!(Heap!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(Heap!()), Allocator) C1;
 
     C1 c = new C1;
     c.insert(1);
@@ -47,7 +49,7 @@ unittest{
 
 unittest{
     // lone heap index helper
-    alias MultiIndexContainer!(int, IndexedBy!(Heap!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(Heap!()), Allocator) C1;
 
     C1 d = new C1;
     auto c = d.get_index!0;
@@ -84,7 +86,7 @@ unittest{
 unittest{
     // min heap, max heap
     alias MultiIndexContainer!(int, IndexedBy!(Heap!("a", "a>b"), 
-                Heap!("a", "a<b"))) C1;
+                Heap!("a", "a<b")), Allocator) C1;
 
     C1 c = new C1;
     auto min = c.get_index!0;
@@ -180,6 +182,7 @@ unittest{
             // you just need to pass in the index number.
             SignalOnChange!(ValueSignal!(0)), 
             MutableView,
+            Allocator,
             ) MyContainer;
 
     MyContainer c = new MyContainer;
@@ -194,6 +197,8 @@ unittest{
 
     v.i = 22; // v's position in c is automatically fixed
     writeln(c[]);
+}
+
 }
 
 void main(){

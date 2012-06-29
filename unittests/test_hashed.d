@@ -5,6 +5,8 @@ import std.algorithm;
 import multi_index;
 import std.traits;
 
+template Testsies(Allocator) {
+
 int[typeof(cast() ElementType!(Range).init)] set(Range)(Range r) {
     typeof(return) arr;
     foreach(e; r) arr[e]=1;
@@ -17,7 +19,7 @@ ElementType!Range[] array(Range)(Range r) {
 }
 
 unittest{
-    alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!()), Allocator) C1;
 
     C1 c = new C1;
     c.insert(1);
@@ -47,7 +49,7 @@ unittest{
 
 unittest{
     // hashed index only 
-    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!()), Allocator) C1;
 
     C1 c = new C1;
     c.insert(1);
@@ -80,7 +82,7 @@ unittest{
 
 // tests for removeKey
 unittest{
-    alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!()), Allocator) C1;
     {
     C1 c = new C1;
     c.insert(iota(20));
@@ -96,7 +98,7 @@ unittest{
     assert(i == 3);
     }
 
-    alias MultiIndexContainer!(string, IndexedBy!(HashedUnique!())) C2;
+    alias MultiIndexContainer!(string, IndexedBy!(HashedUnique!()), Allocator) C2;
     {
     C2 c = new C2;
     c.insert(["a","g","b","c","z"]);
@@ -139,8 +141,8 @@ unittest{
     }
     // end tests from std.container
     {
-    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!())) C3;
-    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) Ci;
+    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!()), Allocator) C3;
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!()), Allocator) Ci;
     auto rbt = new C3;
     rbt.insert([1,2,3,4,4,4,4,5,6,7]);
     assert(rbt.length == 10);
@@ -173,7 +175,7 @@ unittest{
 
 unittest{
     alias MultiIndexContainer!(int, IndexedBy!(HashedUnique!(), 
-                HashedNonUnique!("a*a"))) C1;
+                HashedNonUnique!("a*a")), Allocator) C1;
 
     C1 y = new C1;
     auto c = y.get_index!0;
@@ -209,6 +211,11 @@ unittest{
     c.removeKey(5);
     assert(5 !in c);
 }
+
+}
+
+mixin Testsies!(GCAllocator) a1;
+mixin Testsies!(MallocAllocator) a2;
 
 void main(){
 }

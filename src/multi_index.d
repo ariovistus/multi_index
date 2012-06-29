@@ -845,10 +845,10 @@ struct MallocAllocator{
 import std.traits: isIterable, isNarrowString, ForeachType, Unqual;
 // stolen from phobos and modified.
 // when phobos gets real allocators, this hopefully will go away.
-ForeachType!Range[] allocatedArray(Allocator,Range)(Range r)
+Unqual!(ForeachType!Range)[] allocatedArray(Allocator,Range)(Range r)
 if (isIterable!Range && !isNarrowString!Range)
 {
-    alias ForeachType!Range E;
+    alias Unqual!(ForeachType!Range) E;
     static if (hasLength!Range)
     {
         if(r.length == 0) return null;
@@ -3724,7 +3724,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
             NodeMixin;
 
         enum IndexCtorMixin = Replace!(q{
-            index!$N .hashes.length = primes[0];
+            index!$N .hashes = Allocator.allocate!(ThisNode*)(primes[0])[0 .. primes[0]];
             index!$N .load_factor = 0.80;
         }, "$N", N);
 
@@ -4140,7 +4140,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 return cast(size_t) load;
             }
 
-            @property size_t capacity(){
+            @property size_t capacity() {
                 return hashes.length;
             }
 
@@ -4411,10 +4411,12 @@ version(OldWay){
     }
 }
 
+/// _
 template HashedUnique(alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){
     alias Hashed!(false, KeyFromValue, Hash, Eq) HashedUnique;
 }
+/// _
 template HashedNonUnique(alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){
     alias Hashed!(true, KeyFromValue, Hash, Eq) HashedNonUnique;
