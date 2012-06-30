@@ -4,7 +4,7 @@ MODEL=64
 DDOCFLAGS=-m$(MODEL) -d -c -o- -version=StdDdoc 
 DOCS = src/std.ddoc 
 
-all: topo test_heap test_sequenced test_ra test_ordered test_hashed
+all: topo test_heap test_sequenced test_ra test_ordered test_hashed 
 	
 clean: 
 	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed mru test
@@ -17,6 +17,9 @@ test: test.d src/replace.d src/multi_index.d
 	dmd -gc -of$@ $^
 
 mru: unittests/mru.d src/replace.d src/multi_index.d
+	dmd -gc -of$@ $^
+
+messups: unittests/messups.d src/replace.d src/multi_index.d
 	dmd -gc -of$@ $^
 
 multi_index.html: src/replace.d src/multi_index.d $(DOCS)

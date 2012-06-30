@@ -3,9 +3,10 @@ import std.algorithm;
 import std.range;
 import multi_index;
 
+template Testies(Allocator) {
 unittest{
     // ra index only
-    alias MultiIndexContainer!(int, IndexedBy!(RandomAccess!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(RandomAccess!()),Allocator) C1;
 
     C1 c = new C1;
     c.insert(1);
@@ -46,7 +47,7 @@ unittest{
 unittest{
     // ra index, ra index
     alias MultiIndexContainer!(int, IndexedBy!(RandomAccess!(), 
-                RandomAccess!())) C1;
+                RandomAccess!()),Allocator) C1;
 
     C1 a = new C1;
     auto c = a.get_index!0;
@@ -89,6 +90,10 @@ unittest{
     assert(equal(c[], [9,11]));
     assert(equal(d[], [9,11]));
 }
+}
+
+mixin Testies!(GCAllocator) a1;
+mixin Testies!(MallocAllocator) a2;
 
 void main(){
 }

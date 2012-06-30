@@ -4,9 +4,11 @@ import std.range;
 import std.algorithm;
 import multi_index;
 
+template Testies(Allocator) {
+
 unittest{
     // ordered unique index only
-    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()),Allocator) C1;
 
     C1 c = new C1;
     c.insert(0);
@@ -86,7 +88,7 @@ unittest{
 
 // tests for removeKey
 unittest{
-    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), Allocator) C1;
     {
     C1 c = new C1;
     c.insert(iota(20));
@@ -103,7 +105,7 @@ unittest{
     assert(i == 3);
     }
 
-    alias MultiIndexContainer!(string, IndexedBy!(OrderedUnique!())) C2;
+    alias MultiIndexContainer!(string, IndexedBy!(OrderedUnique!()),Allocator) C2;
     {
     C2 c = new C2;
     c.insert(["a","g","b","c","z"]);
@@ -144,7 +146,7 @@ unittest{
     }
     // end tests from std.container
     {
-    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) Ci;
+    alias MultiIndexContainer!(int, IndexedBy!(Sequenced!()), Allocator) Ci;
     auto rbt = new C1;
     rbt.insert(iota(20));
 
@@ -168,7 +170,7 @@ unittest{
     assert(equal(rbt[], [0,3,16,19]));
     }
     {
-        alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!())) C5;
+        alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!()),Allocator) C5;
         C5 c = new C5;
         c.insert([1,2,3,4,4,4,4,5,6,7]);
         assert(equal(c.equalRange(4), [4,4,4,4]));
@@ -181,7 +183,7 @@ unittest{
 
 unittest{
     // ordered unique, ordered nonunique
-    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), OrderedNonUnique!("-a"))) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), OrderedNonUnique!("-a")), Allocator) C1;
 
     C1 a = new C1;
     auto c = a.get_index!0;
@@ -290,7 +292,7 @@ unittest{
 }
 
 unittest{
-    alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!())) C1;
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!()), Allocator) C1;
     C1 c = new C1;
     c.insert([1,2,3,4,4,4,4,5,6,7]);
     
@@ -300,5 +302,9 @@ unittest{
     assert(equal(c.bounds!"[)"(-1,2), [1]));
     assert(equal(c.bounds!"[)"(4,5), [4,4,4,4]));
 }
+}
+
+mixin Testies!(GCAllocator) a1;
+mixin Testies!(MallocAllocator) a2;
 
 void main(){}
