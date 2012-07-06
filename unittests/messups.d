@@ -24,6 +24,8 @@ alias MultiIndexContainer!(MyRecord,
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), GCAllocator, MallocAllocator) C7;
 // something extraneous
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), int) C8;
+// duplicate index names
+alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), "a", Sequenced!(), "a")) C8;
 void main(){
 }
 

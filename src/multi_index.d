@@ -800,10 +800,9 @@ import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll;
 import std.traits: isImplicitlyConvertible, isDynamicArray;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
-import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf;
+import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf, allSatisfy;
 import std.functional: unaryFun, binaryFun;
 import std.string: format;
-import std.typetuple: allSatisfy;
 version(PtrHackery){
     import core.bitop: bt, bts, btr;
 }
@@ -4424,6 +4423,27 @@ template HashedNonUnique(alias KeyFromValue="a",
 
 struct IndexedBy(L...)
 {
+    template _inner(size_t index, List...) {
+        static if(List.length <= 1) {
+            alias TypeTuple!() names;
+            alias TypeTuple!() name_indeces;
+            alias TypeTuple!(List) indeces;
+        }else static if(IsIndex!(List[0]) && is(typeof(List[1]) == string)) {
+            alias _inner!(index+1,List[2 .. $]) next;
+            alias TypeTuple!(List[1], next.names) names;
+            alias TypeTuple!(index, next.name_indeces) name_indeces;
+            alias TypeTuple!(List[0], next.indeces) indeces;
+        }else {
+            alias _inner!(index+1,List[1 .. $]) next;
+            alias next.names names;
+            alias next.name_indeces name_indeces;
+            alias TypeTuple!(List[0], next.indeces) indeces;
+        }
+    }
+
+    alias _inner!(0, L).names Names;
+    alias _inner!(0, L).name_indeces NameIndeces;
+    alias _inner!(0, L).indeces Indeces;
     alias L List;
 }
 
@@ -4505,7 +4525,7 @@ struct SignalOnChange(L...) {
             Inner i;
             return i;
         }
-        enum N = IndexedBy.List.length;
+        enum N = IndexedBy.Indeces.length;
         alias L List;
 
 
@@ -4527,7 +4547,7 @@ struct SignalOnChange(L...) {
             static if(i < List.length){
                 static if(List[i].MixinAlias == mixinAlias){
                     enum index = GetIndex!(List[i]);
-                    static if(IndexedBy.List[index].BenefitsFromSignals){
+                    static if(IndexedBy.Indeces[index].BenefitsFromSignals){
                         enum size_t[] result = 
                             FindIndeces!(mixinAlias, i+1, 
                                     OU!(size_t).orderedUniqueInsert(
@@ -4713,7 +4733,7 @@ struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
             //alias L[0] L0;
             enum result = 
                 Replace!(q{
-                    alias IndexedBy.List[$N] L$N;
+                    alias IndexedBy.Indeces[$N] L$N;
                     alias L$N.Inner!(ThisContainer, typeof(this),Value,ValueView,$N, Allocator) M$N;
                     mixin M$N.NodeMixin!(M$N.NodeTuple) index$N;
                     template index(size_t n) if(n == $N){ alias index$N index; }
@@ -4724,7 +4744,7 @@ struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
         }
     }
 
-    enum stuff = ForEachIndex!(0, IndexedBy.List).result;
+    enum stuff = ForEachIndex!(0, IndexedBy.Indeces).result;
     mixin(stuff);
 }
 
@@ -4755,12 +4775,14 @@ int IndexedByCount(X...)() {
 size_t[] IndexedByAllIndeces(X)() {
     size_t[] res = [];
     foreach(i,x; X.List){
-        static if(!IsIndex!(x)) {
+        static if(!IsIndex!x && 
+                (i == 0 || !IsIndex!(X.List[i-1]) || !is(typeof(x) == string))) {
             res ~= i;
         }
     }
     return res;
 }
+
 
 template FindIndexedBy(Args...) {
     static if(IsIndexedBy!(Args[0])) {
@@ -4822,7 +4844,7 @@ template FindConstnessView(Args...) {
 int AllocatorCount(Args...)() {
     int r = 0;
     foreach(i,x; Args){
-        static if(IsAllocator!x) {
+        static if(__traits(compiles, IsAllocator!x) && IsAllocator!x) {
             r++;
         }
     }
@@ -4839,7 +4861,7 @@ template FindAllocator(Args...) {
     }
 }
 
-size_t[] indexGarbage(Args...)() {
+size_t[] IndexGarbage(Args...)() {
     size_t[] res = [];
     foreach(i,x; Args){
         static if(!(__traits(compiles,IsIndexedBy!x) && IsIndexedBy!x) &&
@@ -4907,9 +4929,9 @@ if(AllocatorCount!(Args)() > 1) {
 }
 
 class MultiIndexContainer(Value, Args...)
-if(indexGarbage!(Args)().length != 0) {
+if(IndexGarbage!(Args)().length != 0) {
     import std.conv;
-    enum lst = indexGarbage!(Args)();
+    enum lst = IndexGarbage!(Args)();
     pragma(msg, "MultiIndexContainer unknown arguments at");
     mixin template Frch(size_t i) {
         static if(i < lst.length) {
@@ -4931,6 +4953,16 @@ if(indexGarbage!(Args)().length != 0) {
 +/
 }
 
+template _AllUnique(Thing...) {
+    enum _AllUnique = NoDuplicates!Thing .length == Thing.length;
+}
+class MultiIndexContainer(Value, Args...)
+if(!_AllUnique!(FindIndexedBy!Args .Names)) {
+    static assert(false, "duplicates!");
+}
+
+
+
 // end error sinks
 
 /++ 
@@ -4940,10 +4972,11 @@ class MultiIndexContainer(Value, Args...)
 if(IndexedByCount!(Args)() == 1 &&
    FindIndexedBy!Args .List.length != 0 &&
    IndexedByAllIndeces!(FindIndexedBy!Args)().length == 0 &&
+   _AllUnique!(FindIndexedBy!Args .Names) &&
    SignalOnChangeCount!(Args)() <= 1 &&
    ConstnessViewCount!(Args)() <= 1 &&
    AllocatorCount!(Args)() <= 1 &&
-   indexGarbage!(Args)().length == 0) {
+   IndexGarbage!(Args)().length == 0) {
 
     alias FindIndexedBy!Args IndexedBy;
     // @@@ DMD ISSUE 6475 @@@ following gives forward reference error
@@ -4961,8 +4994,8 @@ if(IndexedByCount!(Args)() == 1 &&
 
     /+
     template IndexedByList0(size_t i, stuff...){
-        static if(i < IndexedBy.List.length){
-            alias typeof(IndexedBy.List[i].Inner!(typeof(this), ThisNode, Value, i).exposeType()) x;
+        static if(i < IndexedBy.Indeces.length){
+            alias typeof(IndexedBy.Indeces[i].Inner!(typeof(this), ThisNode, Value, i).exposeType()) x;
             alias IndexedByList0!(i+1, stuff, x).result result;
         }else{
             alias stuff result;
@@ -4975,10 +5008,10 @@ if(IndexedByCount!(Args)() == 1 &&
     size_t node_count;
 
     template ForEachCtorMixin(size_t i){
-        static if(i < IndexedBy.List.length){
-            static if(is(typeof(IndexedBy.List[i].Inner!(typeof(this), 
+        static if(i < IndexedBy.Indeces.length){
+            static if(is(typeof(IndexedBy.Indeces[i].Inner!(typeof(this), 
                                 ThisNode,Value,ValueView,i,Allocator).IndexCtorMixin))){
-                enum result =  IndexedBy.List[i].Inner!(typeof(this), 
+                enum result =  IndexedBy.Indeces[i].Inner!(typeof(this), 
                         ThisNode,Value, ValueView,i,Allocator).IndexCtorMixin ~ 
                     ForEachCtorMixin!(i+1).result;
             }else enum result = ForEachCtorMixin!(i+1).result;
@@ -5016,8 +5049,75 @@ if(IndexedByCount!(Args)() == 1 &&
         Allocator.deallocate(p);
     }
 
+    template ForEachIndex(size_t N,L...){
+        static if(L.length > 0){
+            enum result = 
+                Replace!(q{
+                    alias IndexedBy.Indeces[$N] L$N;
+                    alias L$N.Inner!(typeof(this),ThisNode,Value, ValueView,$N,Allocator) M$N;
+                    mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
+                    template index(size_t n) if(n == $N){ alias index$N index; }
+                    class Index$N{
+
+                        // grr opdispatch not handle this one
+                        auto opSlice(T...)(T ts){
+                            return this.outer.index!($N).opSlice(ts);
+                        }
+
+                        // grr opdispatch not handle this one
+                        auto opIndex(T...)(T ts){
+                            return this.outer.index!($N).opIndex(ts);
+                        }
+
+                        // grr opdispatch not handle this one
+                        auto opIndexAssign(T...)(T ts){
+                            return this.outer.index!($N).opIndexAssign(ts);
+                        }
+
+                        // grr opdispatch not handle this one
+                        auto opBinaryRight(string op, T...)(T ts){
+                            return this.outer.index!($N).opBinaryRight!(op)(ts);
+                        }
+
+                        // grr opdispatch not handle this one
+                        auto bounds(string bs = "[]", T)(T t1, T t2){
+                            return this.outer.index!($N).bounds!(bs,T)(t1,t2);
+                        }
+
+                        auto opDispatch(string s, T...)(T args){
+                            mixin("return this.outer.index!($N)."~s~"(args);");
+                        }
+                    }
+                    @property Index$N get_index(size_t n)() if(n == $N){
+                        return this.new Index$N();
+                    }
+                },  "$N", N) ~ 
+                ForEachIndex!(N+1, L[1 .. $]).result;
+        }else{
+            enum result = "";
+        }
+    }
+
+    enum stuff = (ForEachIndex!(0, IndexedBy.Indeces).result);
+    mixin(stuff);
+
+    template ForEachNamedIndex(size_t i){
+        static if(i >= IndexedBy.Names.length) {
+            enum result = "";
+        }else {
+            enum result = Replace!(q{
+                alias get_index!$N $name;
+            }, "$N", IndexedBy.NameIndeces[i], "$name", IndexedBy.Names[i]) ~
+            ForEachNamedIndex!(i+1).result;
+        }
+    }
+
+    enum named_stuff = ForEachNamedIndex!0 .result;
+    mixin(named_stuff);
+
+
     template ForEachCheckInsert(size_t i, size_t N){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             static if(i != N && is(typeof({ ThisNode* p; 
                             index!i._DenyInsertion(p,p);}))){
                 enum result = (Replace!(q{
@@ -5030,7 +5130,7 @@ if(IndexedByCount!(Args)() == 1 &&
     }
 
     template ForEachDoInsert(size_t i, size_t N){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             static if(i != N){
                 static if(is(typeof({ ThisNode* p; 
                                 index!i._DenyInsertion(p,p);}))){
@@ -5092,7 +5192,7 @@ denied:
     }
 
     template ForEachDoRemove(size_t i, size_t N){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             static if(i != N){
                 enum result = Replace!(q{
                     index!(Y)._Remove(node);
@@ -5111,7 +5211,7 @@ denied:
     /// @@@BUG@@@ cannot pass length directly to _RemoveAllBut
     auto _RemoveAll(size_t N = -1)(ThisNode* node){
         static if(N == -1) {
-            enum _grr_bugs = IndexedBy.List.length;
+            enum _grr_bugs = IndexedBy.Indeces.length;
             _RemoveAllBut!(_grr_bugs)(node);
         }else {
             _RemoveAllBut!N(node);
@@ -5125,7 +5225,7 @@ denied:
     }
 
     template ForEachIndexPosition(size_t i){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             static if(is(typeof(index!i ._NodePosition((ThisNode*).init)))){
                 enum ante = Replace!(q{
                     auto pos$i = index!$i ._NodePosition(node);
@@ -5181,7 +5281,7 @@ denied:
     }
 
     template ForEachClear(size_t i){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             enum string result = Replace!(q{
                 index!$i ._ClearIndex();
             }, "$i", i) ~ ForEachClear!(i+1).result;
@@ -5200,7 +5300,7 @@ denied:
     }
 
     template ForEachCheck(size_t i){
-        static if(i < IndexedBy.List.length){
+        static if(i < IndexedBy.Indeces.length){
             enum result = Replace!(q{
                 index!($i)._Check();
             },"$i", i) ~ ForEachCheck!(i+1).result;
@@ -5224,57 +5324,6 @@ denied:
         }
     }
 
-    template ForEachIndex(size_t N,L...){
-        static if(L.length > 0){
-            enum result = 
-                Replace!(q{
-                    alias IndexedBy.List[$N] L$N;
-                    alias L$N.Inner!(typeof(this),ThisNode,Value, ValueView,$N,Allocator) M$N;
-                    mixin M$N.IndexMixin!(M$N.IndexTuple) index$N;
-                    template index(size_t n) if(n == $N){ alias index$N index; }
-                    class Index$N{
-
-                        // grr opdispatch not handle this one
-                        auto opSlice(T...)(T ts){
-                            return this.outer.index!($N).opSlice(ts);
-                        }
-
-                        // grr opdispatch not handle this one
-                        auto opIndex(T...)(T ts){
-                            return this.outer.index!($N).opIndex(ts);
-                        }
-
-                        // grr opdispatch not handle this one
-                        auto opIndexAssign(T...)(T ts){
-                            return this.outer.index!($N).opIndexAssign(ts);
-                        }
-
-                        // grr opdispatch not handle this one
-                        auto opBinaryRight(string op, T...)(T ts){
-                            return this.outer.index!($N).opBinaryRight!(op)(ts);
-                        }
-
-                        // grr opdispatch not handle this one
-                        auto bounds(string bs = "[]", T)(T t1, T t2){
-                            return this.outer.index!($N).bounds!(bs,T)(t1,t2);
-                        }
-
-                        auto opDispatch(string s, T...)(T args){
-                            mixin("return this.outer.index!($N)."~s~"(args);");
-                        }
-                    }
-                    @property Index$N get_index(size_t n)() if(n == $N){
-                        return this.new Index$N();
-                    }
-                },  "$N", N) ~ 
-                ForEachIndex!(N+1, L[1 .. $]).result;
-        }else{
-            enum result = "";
-        }
-    }
-
-    enum stuff = (ForEachIndex!(0, IndexedBy.List).result);
-    mixin(stuff);
 
     /+
     @property auto to_range(size_t N, Range)(Range r)
@@ -5289,7 +5338,7 @@ denied:
 
     private template RangeIndexNo(R){
         template IndexNoI(size_t i){
-            static if(i == IndexedBy.List.length){
+            static if(i == IndexedBy.Indeces.length){
                 enum size_t IndexNoI = -1;
             }else static if(is(index!(i).Range == R)){
                 pragma(msg, Format!("%s is index!%s.Range (%s)",R.stringof,i, (index!(i).Range).stringof));
