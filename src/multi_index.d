@@ -130,6 +130,16 @@ c.replace(r, value)
 Replaces $(D r.front) with $(D value).
 )))
 $(TR  $(TD $(D
+c.relocateFront(r, loc)
+))$(TD $(TEXTWITHCOMMAS 
+Moves $(D r.front) to position before $(D loc.front).
+)))
+$(TR  $(TD $(D
+c.relocateBack(r, loc)
+))$(TD $(TEXTWITHCOMMAS 
+Moves $(D r.back) to position after $(D loc.back).
+)))
+$(TR  $(TD $(D
 c.insertFront(stuff)
 ))$(TD $(TEXTWITHCOMMAS 
 Inserts stuff to the front of the index.
@@ -1050,6 +1060,10 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
             ThisNode* _front, _back;
             alias Range_0 Range;
 
+            template IsMyRange(T) {
+                enum bool IsMyRange = is(T == Range);
+            }
+
 /**
 Returns the number of elements in the container.
 
@@ -1117,7 +1131,8 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 /**
 Moves moveme.front to the position before tohere.front and inc both ranges.
 Probably not safe to use either range afterwards, but who knows. 
-Preconditions: moveme and tohere are both ranges of the same container
+Preconditions: moveme and tohere are both ranges of the same container.
+Postconditions: moveme.front is incremented
 Complexity: $(BIGOH 1)
 */
             void relocateFront(ref Range moveme, Range tohere)
@@ -1139,6 +1154,7 @@ Complexity: $(BIGOH 1)
 Moves moveme.back to the position after tohere.back and dec both ranges.
 Probably not safe to use either range afterwards, but who knows. 
 Preconditions: moveme and tohere are both ranges of the same container
+Postconditions: moveme.back is decremented
 Complexity: $(BIGOH 1)
 */
             void relocateBack(ref Range moveme, Range tohere)
@@ -1427,6 +1443,10 @@ template RandomAccess() {
         /// __RemoveAllBut!N, node_count
         mixin template IndexMixin(size_t N, ThisContainer){
             ThisNode*[] ra;
+
+            template IsMyRange(T) {
+                enum bool IsMyRange = is(T == Range);
+            }
 
             /// Defines the index' primary range, which embodies a
             /// random access range 
@@ -2357,6 +2377,10 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     alias unaryFun!KeyFromValue key;
     alias typeof(key(Value.init)) KeyType;
 
+    template IsMyRange(T) {
+        enum bool IsMyRange = is(T == Range);
+    }
+
     auto _add(Node n)
     {
         bool added = true;
@@ -3076,7 +3100,7 @@ Complexity: ??
     }
 
     /**
-     * Get a range from the container with all elements that are < k according
+     * Get a range from the container with all elements that are > k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
@@ -3088,7 +3112,7 @@ Complexity: ??
     }
 
     /**
-     * Get a range from the container with all elements that are > k according
+     * Get a range from the container with all elements that are < k according
      * to the less comparator
      *
      * Complexity: $(BIGOH log(n))
@@ -3299,6 +3323,10 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
             alias unaryFun!KeyFromValue key;
             alias binaryFun!Compare less;
             alias typeof(key((Value).init)) KeyType;
+
+            template IsMyRange(T) {
+                enum bool IsMyRange = is(T == Range);
+            }
 
             ThisNode*[] _heap;
 
@@ -3734,6 +3762,10 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
             alias typeof(key((Value).init)) KeyType;
             alias unaryFun!Hash hash;
             alias binaryFun!Eq eq;
+
+            template IsMyRange(T) {
+                enum bool IsMyRange = is(T == Range) || is(T == ListRange);
+            }
 
             ThisNode*[] hashes;
             ThisNode* _first;
@@ -4771,8 +4803,8 @@ int IndexedByCount(X...)() {
     }
     return r;
 }
-/// erm. returns list of nonindeces in IndexedBy
 size_t[] IndexedByAllIndeces(X)() {
+    // erm. returns list of nonindeces in IndexedBy
     size_t[] res = [];
     foreach(i,x; X.List){
         static if(!IsIndex!x && 
@@ -4966,7 +4998,23 @@ if(!_AllUnique!(FindIndexedBy!Args .Names)) {
 // end error sinks
 
 /++ 
-The container
+The container. Don't call any index methods from this container directly; use
+a reference to an individual index, which can be obtained via
+---
+container.get_index!N
+---
+or
+---
+container.name
+---
+for named indeces.
+
+If you have a range into an index of this container, you can convert it to a 
+range of index N via
+---
+container.to_range!N(range)
+---
+This is equivalent to c++ multi_index' project
 +/
 class MultiIndexContainer(Value, Args...) 
 if(IndexedByCount!(Args)() == 1 &&
@@ -5201,14 +5249,14 @@ denied:
         }else enum result = "";
     }
 
-    /// disattach node from all indeces except index N
+    // disattach node from all indeces except index N
     void _RemoveAllBut(size_t N)(ThisNode* node){
         mixin(ForEachDoRemove!(0, N).result);
         node_count --;
     }
 
-    /// disattach node from all indeces.
-    /// @@@BUG@@@ cannot pass length directly to _RemoveAllBut
+    // disattach node from all indeces.
+    // @@@BUG@@@ cannot pass length directly to _RemoveAllBut
     auto _RemoveAll(size_t N = -1)(ThisNode* node){
         static if(N == -1) {
             enum _grr_bugs = IndexedBy.Indeces.length;
@@ -5263,7 +5311,7 @@ denied:
         return false;
     }
 
-/**
+/*
 Perform mod on node.value and perform any necessary fixups to this container's 
 indeces. mod may be of the form void mod(ref Value), in which case mod directly modifies the value in node. If the result of mod violates any index' invariant,
 the node is removed from the container. 
@@ -5325,26 +5373,22 @@ denied:
     }
 
 
-    /+
-    @property auto to_range(size_t N, Range)(Range r)
-    if(RangeIndexNo!RangeY != -1){
-        static if(N == RangeIndexNo!Range){
+    @property auto to_range(size_t N, Range0)(Range0 r)
+    if(RangeIndexNo!Range0 != -1){
+        static if(N == RangeIndexNo!Range0){
             return r;
         }else{
             return index!N.fromNode(r.node);
         }
     }
-    +/
 
     private template RangeIndexNo(R){
         template IndexNoI(size_t i){
             static if(i == IndexedBy.Indeces.length){
                 enum size_t IndexNoI = -1;
-            }else static if(is(index!(i).Range == R)){
-                pragma(msg, Format!("%s is index!%s.Range (%s)",R.stringof,i, (index!(i).Range).stringof));
+            }else static if(index!(i).IsMyRange!(R)){
                 enum size_t IndexNoI = i;
             }else{
-                pragma(msg, Format!("%s is not index!%s.Range (%s)",R.stringof,i,(index!(i).Range).stringof));
                 enum IndexNoI = IndexNoI!(i+1);
             }
         }

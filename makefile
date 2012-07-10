@@ -4,7 +4,7 @@ MODEL=64
 DDOCFLAGS=-m$(MODEL) -d -c -o- -version=StdDdoc 
 DOCS = src/std.ddoc 
 
-MI = src/multi_index.d src/replace.d
+MI = src/replace.d src/multi_index.d 
 
 all: test_heap test_sequenced test_ra test_ordered test_hashed 
 	
@@ -27,7 +27,7 @@ messups: unittests/messups.d $(MI)
 tagging: unittests/tagging.d $(MI)
 	dmd -gc -of$@ $^ -unittest
 
-multi_index.html: $(MI) $(DOCS)
+multi_index.html: src/ddoc.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
 topo: unittests/topo.d src/multi_index.d src/replace.d
 	$(DMD) -gc -oftopo $^ 
