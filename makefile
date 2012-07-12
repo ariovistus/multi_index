@@ -9,7 +9,8 @@ MI = src/replace.d src/multi_index.d
 all: test_heap test_sequenced test_ra test_ordered test_hashed 
 	
 clean: 
-	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed mru test tagging messups
+	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed 
+	rm -f mru test tagging messups signals
 	rm -f *.o
 	rm -f multi_index.html
 
@@ -32,8 +33,10 @@ multi_index.html: src/ddoc.d $(DOCS)
 topo: unittests/topo.d src/multi_index.d src/replace.d
 	$(DMD) -gc -oftopo $^ 
 
+signals: unittests/signals.d $(MI)
+	$(DMD) -gc -unittest -of$@ $^
 test_heap: unittests/test_heap.d $(MI)
-	$(DMD) -gc -unittest -oftest_heap $^
+	$(DMD) -gc -unittest -of$@ $^
 
 test_sequenced: unittests/test_sequenced.d $(MI)
 	$(DMD) -gc -unittest -oftest_sequenced $^

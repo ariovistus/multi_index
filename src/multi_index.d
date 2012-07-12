@@ -4558,16 +4558,20 @@ struct SignalOnChange(L...) {
             return i;
         }
         enum N = IndexedBy.Indeces.length;
-        alias L List;
+        alias ExpandStarSignals!(IndexedBy,L) List;
 
 
         template GetIndex(valueSignal){
             static if(__traits(compiles,valueSignal.Index)){
                 enum GetIndex = valueSignal.Index;
             }else{
-                static assert(__traits(compiles,List[i].Tag));
-                static assert(false, 
-                        "implement me (when you implement tagging)");
+                static assert(__traits(compiles,valueSignal.Tag));
+                static if(valueSignal.Tag == "*") {
+                    static assert(false, "you bad, bad person");
+                }else {
+                    enum _TagIndex = staticIndexOf!(valueSignal.Tag, IndexedBy.Names);
+                    enum GetIndex = IndexedBy.NameIndeces[_TagIndex];
+                }
             }
         }
 
@@ -4679,6 +4683,28 @@ struct SignalOnChange(L...) {
     }
 }
 
+template ExpandStarSignals(IndexedBy, L...) {
+    static if(L.length == 0) {
+        alias TypeTuple!() ExpandStarSignals;
+    }else static if(__traits(compiles,L[0].Tag) && L[0].Tag == "*") {
+        alias TypeTuple!(ExpandStarSignal!(IndexedBy, 0, L[0]), 
+            ExpandStarSignals!(IndexedBy, L[1 .. $])) ExpandStarSignals;
+    }else{
+        alias TypeTuple!(L[0], ExpandStarSignals!(IndexedBy, L[1 .. $]))
+            ExpandStarSignals;
+    }
+}
+
+template ExpandStarSignal(IndexedBy, size_t i, ProtoSignal) {
+    static if(i >= IndexedBy.Indeces.length) {
+        alias TypeTuple!() ExpandStarSignal;
+    }else {
+        alias TypeTuple!(ValueSignal!(i, ProtoSignal.MixinAlias),
+            ExpandStarSignal!(IndexedBy, i+1, ProtoSignal)) ExpandStarSignal;
+    }
+
+}
+
 /// _
 struct ValueSignal(size_t index, string mixinAlias = "")
 {
@@ -4755,7 +4781,8 @@ struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
             }
         }
 
-        mixin(ForEachSignal!(0).stuff);
+        enum signal_stuff = ForEachSignal!(0).stuff;
+        mixin(signal_stuff);
     }
 
 
