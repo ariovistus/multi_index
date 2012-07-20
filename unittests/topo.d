@@ -67,7 +67,7 @@ struct Node{
 }
 
 alias MultiIndexContainer!(Node*,
-        SignalOnChange!(ValueSignal!(1)),
+        ValueChangedSlots!(ValueSignal!(1)),
         IndexedBy!(
             HashedUnique!("a.name"),
             Heap!("a.order()", "a>b"),

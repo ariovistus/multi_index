@@ -45,7 +45,7 @@ memory, for some k < 4
 
 $(B Quick Start):
 
-A MultiIndexContainer needs two things: a value type and a list of indeces. Put the list of indeces inside $(D IndexedBy). That way we can give MultiIndexContainer other lists, like signals and tags [later].
+A MultiIndexContainer needs two things: a value type and a list of indeces. Put the list of indeces inside $(D IndexedBy). 
 
 -----
 alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) MyContainer;
@@ -53,17 +53,42 @@ alias MultiIndexContainer!(int, IndexedBy!(Sequenced!())) MyContainer;
 MyContainer c = new MyContainer;
 -----
 
+If you like, you can name your indeces
+-----
+alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(),"seq")) MyContainer;
+
+MyContainer c = new MyContainer;
+-----
+
 Generally you do not perform operations on a MultiIndexContainer, but on one of
-its indeces. MultiIndexContainer does define $(D empty) and $(D length), and 
-all indeces support these operations.
+its indeces. Access an index by its position in IndexedBy: 
 -----
-// erg, not feeling inspired ..
 auto seq_index = c.get_index!0;
-writeln(seq_index.empty);
-seq_index.insert([1,2,3]); 
-writeln(seq_index.empty);
-writeln(seq_index.front);
 -----
+If you named your index, you can access it that way:
+-----
+auto seq_index = c.seq;
+-----
+Although an element is inserted into the container through a single index, 
+it must appear in every index, and each index provides a $(I default insertion), which will be automatically invoked. This is relevant when an index 
+provides multiple insertion methods:
+-----
+alias MultiIndexContainer!(int, IndexedBy!(
+            Sequenced!(), "a", 
+            Sequenced!(), "b")) DualList;
+
+DualList list = new DualList();
+
+// Sequenced defaults to insert to back
+list.a.insert([1,2,3,4]);
+assert(equals(list.a[], [1,2,3,4]));
+assert(equals(list.b[], [1,2,3,4]));
+
+list.a.insertFront(5);
+assert(equals(list.a[], [5,1,2,3,4]));
+assert(equals(list.b[], [1,2,3,4,5]));
+-----
+
 The following index types are provided:
 $(BOOKTABLE,
 
@@ -601,36 +626,46 @@ Mutability:
 Providing multiple indeces to the same data does introduce some complexities, 
 though. Consider:
 -----
-alias MultiIndexContainer!(Tuple!(int,string), IndexedBy!(RandomAccess!(), OrderedUnique!("a[1]"))) C;
+class Value{
+    int i;
+    string s;
+    this(int _i, string _s){
+        i = _i;
+        s = _s;
+    }
+}
+alias MultiIndexContainer!(Value,
+        IndexedBy!(RandomAccess!(), OrderedUnique!("a.s"))) C;
 
 C c = new C;
+auto i = c.get_index!0;
 
-c.insert(tuple(1,"a"));
-c.insert(tuple(2,"b"));
-
-c[1][1] = "a"; // bad! index 1 now contains duplicates and is in invalid state! 
+i.insert(new Value(1,"a"));
+i.insert(new Value(2,"b"));
+i[1].s = "a"; // bad! index 1 now contains duplicates and is in invalid state! 
 -----
-In general, the container must either require the user 
-not to perform any damning operation on its elements (which likely will entail 
-paranoid and continual checking of the validity of its indeces), or else not 
-provide a mutable view of its elements. By default, multi_index chooses the 
+In general, the container must either require the user not to perform any 
+damning operation on its elements (which likely will entail paranoid and 
+continual checking of the validity of its indeces), or else not provide 
+a mutable view of its elements. By default, multi_index chooses the 
 latter (with controlled exceptions). 
 
-Thus you are limited to modification operations for which the 
-indeces can detect and perform any fixups (or possibly reject). You can use 
-a remove/modify/insert workflow here, or functions modify and replace, which
+Thus you are limited to modification operations for which the indeces can 
+detect and perform any fixups (or possibly reject). You can use a 
+remove/modify/insert workflow here, or functions modify and replace, which
 each index implements. 
 
-For modifications which are sure not to invalidate any index, you might simply 
+For modifications which are sure not to invalidate any index, you might 
+simply 
 cast away the constness of the returned element. This will work, 
 but it is not recommended on the grounds of aesthetics (it's ew) and 
 maintainability (if the code changes, it's a ticking time bomb).
 
 Finally, if you just have to have a mutable view, include
 MutableView in the MultiIndexContainer specification. This is
-the least safe option (but see Signals and Slots), and you might make liberal
-use of the convenience function check provided by MultiIndexContainer, 
-which asserts the validity of each index.
+the least safe option (but see $(D ValueChangedSlots)), and you might make 
+liberal use of the convenience function check provided by 
+MultiIndexContainer, which asserts the validity of each index.
 
 Efficiency:
 
@@ -681,12 +716,24 @@ t.remove(item);
 and removal will not perform a log(n) search on the second index 
 (rebalancing can't be avoided).
 
-Signals and Slots:
+Signals_and_Slots:
 
-An experimental feature of multi_index. You can design your value type
-to be a signal, a la std.signals, and hook it up to your 
-MultiIndexContainer. (Note: std.signals won't work with multi_index,
+An experimental feature of multi_index. 
+
+You can receive signals from MultiIndexContainer. Someday. Maybe. 
+
+Provided signals:
+
+_*crickets*
+
+You can design your value type to signal to MultiIndexContainer. 
+
+(Note: std.signals won't work with multi_index,
 so don't bother trying)
+
+Provided slots:
+
+ValueChangedSlots - MultiIndexContainer receives signals from a value when value is mutated such that its position in an index may have changed.
 
 Example:
 -------
@@ -709,32 +756,12 @@ class MyRecord{
     // a single slot. For a value type with M signals 
     // (differentiated with mixin aliases), there will be 
     // M slots connected.
-    void delegate()[] slots;
-
-    void connect(void delegate() slot){
-        slots ~= slot;
-    }
-    void disconnect(void delegate() slot){
-        size_t index = slots.length;
-        foreach(i, slot1; slots){
-            if(slot is slot1){
-                index = i;
-                moveAll(slots[i+1 .. $], slots[i .. $-1]);
-                slots.length-=1;
-                break;
-            }
-        }
-    }
-    void emit(){
-        foreach(slot; slots){
-            slot();
-        }
-    }
+    mixin Signals!();
 }
 
 alias MultiIndexContainer!(MyRecord,
     IndexedBy!(OrderedUnique!("a.i")),
-    SignalOnChange!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
+    ValueChangedSlots!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
                                       // it to use the signal defined in MyRecord.
                                       // you just need to pass in the index number.
     MutableView,
@@ -750,7 +777,7 @@ v.i = 22; // v's position in c is automatically fixed
 -------
 
 Thus, MultiIndexContainers can be kept valid automatically PROVIDED no
-modifications occur other than those which call emit.
+modifications occur other than those succeeded by a call to emit.
 
 But what happens if a modification breaks, for example, a uniqueness 
 constraint? Well, you have two options: remove the offending element 
@@ -764,7 +791,7 @@ Find yourself a relational database.
 
 $(B Memory Allocation)
 
-In C++, memory allocators are used to control how a container allocates memory. D does not have this (but will soon). Until it does, multi_index will use a
+In C++, memory allocators are used to control how a container allocates memory. D does not have a standardized allocator interface (but will soon). Until it does, multi_index will use a
 simple allocator protocol to regulate allocation of container structures. 
 Define a struct with two static methods:
 
@@ -1582,8 +1609,10 @@ Complexity: ??
 
    Examples:
     --------------------
-    // ya, this needs updating
-    auto rbt = redBlackTree!true(0, 1, 1, 1, 4, 5, 7);
+    alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!())) C;
+    C c = new C();
+    auto rbt = c.get_index!0;
+    rbt.insert([0, 1, 1, 1, 4, 5, 7]);
     rbt.removeKey(1, 4, 7);
     assert(std.algorithm.equal(rbt[], [0, 1, 1, 5]));
     rbt.removeKey(1, 1, 0);
@@ -2155,7 +2184,9 @@ template HashedNonUnique(alias KeyFromValue="a",
 
 /++
 Encapsulate the list of indeces to be used by the container.
-
+---
+IndexedBy!(Sequenced(), HashedUnique!())
+---
 Indeces may be named:
 ---
 IndexedBy!(Sequenced(), "seq", HashedUnique!(), "hash")
@@ -2172,40 +2203,43 @@ auto seq_index = container.get_index!0
 struct IndexedBy(L...);
 
 /** 
-Specifies how to hook up value signals to indeces.
-
-A value type Value is a signal whenever Value supports the signal 
-interface, ie $(BR)
-
-value.connect(void delegate() slot) $(BR)
-value.disconnect(void delegate() slot)
-
-and has the semantics that whenever value changes in a way that will cause 
-its position in index to change or become invalid, a call is made to slot.
+Specifies how to hook up value signals to indeces with the semantics that 
+whenever value changes in a way that will cause 
+its position in index to change or become invalid, a signal is sent to the
+index.
 The index will respond by fixing the position, or if that is not possible,
 by throwing an exception.
 
-A value may contain multiple signals within different mixin aliases. If this
-is the case, the interface is
-
-value.mixinAlias.connect(void delegate() slot) $(BR)
-value.mixinAlias.disconnect(void delegate() slot)
-
-where mixinAlias is passed in as a string to each element of L.
-
-Arguments must be instantiations of ValueSignal.
-
-Signals to single indeces can be specified by ValueSignal!(index[, mixinAlias])
-
-Signals to all indeces can be specified by ValueSignal!("*"[, mixinAlias])
+Pass in one or more instantiations of $(D ValueSignal). 
 
 A signal can be shared by multiple indeces; however do not associate a signal 
 to the same index more than once.
 */
 
-struct SignalOnChange(L...) ;
+struct ValueChangedSlots(L...) ;
 
-/// _
+/**
+A $(D ValueSignal!(index, mixinAlias)) specifies which $(D index) receives 
+signals, and how to access the value's signal interface. Of course, the 
+value type must provide a signal interface, e.g. 
+-----
+value.connect(void delegate() slot);
+value.disconnect(void delegate() slot);
+-----
+See $(D Signals) for an example implementation.
+
+If a value type wishes to support multiple signal interfaces, 
+mixin aliases are expected to disambiguate:
+-----
+value.mixinAlias.connect(void delegate() slot);
+// etc
+-----
+If you wish to associate a signal with every index,
+-----
+ValueSignal!("*", mixinAlias) 
+-----
+may be used.
+*/
 struct ValueSignal(size_t index, string mixinAlias = "")
 {
     enum size_t Index = index;
@@ -2219,6 +2253,7 @@ struct ValueSignal(string tag, string mixinAlias = "")
     enum MixinAlias = mixinAlias;
 }
 
+/+
 /++
 A multi_index node. Holds the value of a single element,
 plus per-node headers of each index, if any. 
@@ -2238,6 +2273,7 @@ n1.index!2 .left = n2;
 ----
 +/
 struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView);
++/
 
 /// _
 struct ConstView{}
@@ -2249,26 +2285,15 @@ The container. Don't call any index methods from this container directly; use
 a reference to an individual index, which can be obtained via
 ---
 container.get_index!N
+container.name // for named indeces
 ---
-or
----
-container.name
----
-for named indeces.
-
-If you have a range into an index of this container, you can convert it to a 
-range of index N via
----
-container.to_range!N(range)
----
-This is equivalent to c++ multi_index' project
 +/
 class MultiIndexContainer(Value, Args...) {
 
     alias FindIndexedBy!Args IndexedBy;
     // @@@ DMD ISSUE 6475 @@@ following gives forward reference error
-    //alias FindSignalOnChange!Args .Inner!(IndexedBy) NormSignals;
-    alias typeof(FindSignalOnChange!Args .Inner!(IndexedBy).exposeType()) NormSignals;
+    //alias FindValueChangedSlots!Args .Inner!(IndexedBy) NormSignals;
+    alias typeof(FindValueChangedSlots!Args .Inner!(IndexedBy).exposeType()) NormSignals;
     alias FindConstnessView!Args ConstnessView;
     alias FindAllocator!Args Allocator;
 
@@ -2588,6 +2613,9 @@ denied:
         }
     }
 
+    /**
+      Test each index for consistency. Don't expect this to be a quick operation.
+    */
     void check(){
         mixin(ForEachCheck!(0).result);
     }
@@ -2631,5 +2659,37 @@ denied:
             }
         }
         enum size_t RangeIndexNo = IndexNoI!(0);
+    }
+}
+
+/++ 
+ + Simple signal implementation, which can be used in conjunction with
+ + 
+ + * ValueChangedSlots: In your value type, call emit when (after) the value has been mutated and its position in the index may have changed
+ +/
+mixin template Signal() {
+    void delegate()[] slots;
+
+    /// _
+    void connect(void delegate() slot){
+        slots ~= slot;
+    }
+    /// _
+    void disconnect(void delegate() slot){
+        size_t index = slots.length;
+        foreach(i, slot1; slots){
+            if(slot is slot1){
+                index = i;
+                moveAll(slots[i+1 .. $], slots[i .. $-1]);
+                slots.length-=1;
+                break;
+            }
+        }
+    }
+    /// _
+    void emit(){
+        foreach(slot; slots){
+            slot();
+        }
     }
 }

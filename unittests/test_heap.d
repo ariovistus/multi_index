@@ -184,7 +184,7 @@ unittest{
             // this tells MultiIndexContainer that you want
             // it to use the signal defined in MyRecord.
             // you just need to pass in the index number.
-            SignalOnChange!(ValueSignal!(0)), 
+            ValueChangedSlots!(ValueSignal!(0)), 
             MutableView,
             Allocator,
             ) MyContainer;

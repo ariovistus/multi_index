@@ -12,20 +12,25 @@ import multi_index;
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), MutableView)) C4;
 // too many constness views
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), MutableView, ConstView) C5;
-// too many SignalOnChange
+// too many ValueChangedSlots
 /+
 alias MultiIndexContainer!(MyRecord,
             IndexedBy!(Heap!("a.i","a>b")),
-            SignalOnChange!(ValueSignal!(0)), 
-            SignalOnChange!(ValueSignal!(1)), 
+            ValueChangedSlots!(ValueSignal!(0)), 
+            ValueChangedSlots!(ValueSignal!(1)), 
             ) C6;
             +/
+// signal hooked up too many times
+alias MultiIndexContainer!(MyRecord,
+            IndexedBy!(Heap!("a.i","a>b")),
+            ValueChangedSlots!(ValueSignal!(0), ValueSignal!(0)), 
+            ) C6_1;
 // too many allocators
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), GCAllocator, MallocAllocator) C7;
 // something extraneous
 //alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), int) C8;
 // duplicate index names
-alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), "a", Sequenced!(), "a")) C8;
+//alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), "a", Sequenced!(), "a")) C8;
 void main(){
 }
 

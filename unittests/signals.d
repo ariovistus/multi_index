@@ -85,7 +85,7 @@ template Testies(Allocator) {
 
         alias MultiIndexContainer!(MyRecord,
                 IndexedBy!(OrderedUnique!("a.name")),
-                SignalOnChange!(ValueSignal!(0)), 
+                ValueChangeSlots!(ValueSignal!(0)), 
                 MutableView,
                 Allocator,
                 ) MyContainer1;
@@ -93,7 +93,7 @@ template Testies(Allocator) {
 
         alias MultiIndexContainer!(MyRecord,
                 IndexedBy!(OrderedUnique!("a.name"), "sup"),
-                SignalOnChange!(ValueSignal!("sup")), 
+                ValueChangeSlots!(ValueSignal!("sup")), 
                 MutableView,
                 Allocator,
                 ) MyContainer2;
@@ -101,7 +101,7 @@ template Testies(Allocator) {
 
         alias MultiIndexContainer!(MyRecord,
                 IndexedBy!(OrderedUnique!("a.name")),
-                SignalOnChange!(ValueSignal!("*")), 
+                ValueChangeSlots!(ValueSignal!("*")), 
                 MutableView,
                 Allocator,
                 ) MyContainer3;
@@ -120,7 +120,7 @@ template Testies(Allocator) {
                         function(a){return a.name.findSplit(" ")[2].findSplit(" ")[2]; }), 
                     "last",
                 ),
-                SignalOnChange!(ValueSignal!("*")), 
+                ValueChangeSlots!(ValueSignal!("*")), 
                 MutableView,
                 Allocator,
                 ) MyContainer4;

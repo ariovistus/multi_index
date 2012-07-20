@@ -681,7 +681,8 @@ t.remove(item);
 and removal will not perform a log(n) search on the second index 
 (rebalancing can't be avoided).
 
-Signals and Slots:
+Signals_and_Slots:
+
 
 An experimental feature of multi_index. You can design your value type
 to be a signal, a la std.signals, and hook it up to your 
@@ -734,7 +735,7 @@ class MyRecord{
 
 alias MultiIndexContainer!(MyRecord,
     IndexedBy!(OrderedUnique!("a.i")),
-    SignalOnChange!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
+    ValueChangedSlots!(ValueSignal!(0)), // this tells MultiIndexContainer that you want
                                       // it to use the signal defined in MyRecord.
                                       // you just need to pass in the index number.
     MutableView,
@@ -4547,7 +4548,7 @@ A signal can be shared by multiple indeces; however do not associate a signal
 to the same index more than once.
 */
 
-struct SignalOnChange(L...) {
+struct ValueChangedSlots(L...) {
     struct Inner(IndexedBy){
         // by some forward referencing error or other, (issue 6475)
         // I can't seem to get a hold of inner in, but
@@ -4851,28 +4852,28 @@ template FindIndexedBy(Args...) {
     }
 }
 
-template IsSignalOnChange(alias X) {
-    enum bool IsSignalOnChange = __traits(compiles, X.stringof) && 
-        X.stringof.startsWith("SignalOnChange");
+template IsValueChangedSlots(alias X) {
+    enum bool IsValueChangedSlots = __traits(compiles, X.stringof) && 
+        X.stringof.startsWith("ValueChangedSlots");
 }
 
-int SignalOnChangeCount(Args...)() {
+int ValueChangedSlotsCount(Args...)() {
     int r = 0;
     foreach(i,x; Args){
-        static if(__traits(compiles,IsSignalOnChange!x) && IsSignalOnChange!x) {
+        static if(__traits(compiles,IsValueChangedSlots!x) && IsValueChangedSlots!x) {
             r++;
         }
     }
     return r;
 }
 
-template FindSignalOnChange(Args...) {
+template FindValueChangedSlots(Args...) {
     static if(Args.length == 0) {
-        alias SignalOnChange!() FindSignalOnChange;
-    }else static if(IsSignalOnChange!(Args[0])) {
-        alias Args[0] FindSignalOnChange;
+        alias ValueChangedSlots!() FindValueChangedSlots;
+    }else static if(IsValueChangedSlots!(Args[0])) {
+        alias Args[0] FindValueChangedSlots;
     }else {
-        alias FindSignalOnChange!(Args[1 .. $]) FindSignalOnChange;
+        alias FindValueChangedSlots!(Args[1 .. $]) FindValueChangedSlots;
     }
 }
 
@@ -4924,7 +4925,7 @@ size_t[] IndexGarbage(Args...)() {
     size_t[] res = [];
     foreach(i,x; Args){
         static if(!(__traits(compiles,IsIndexedBy!x) && IsIndexedBy!x) &&
-                !(__traits(compiles,IsSignalOnChange!x) && IsSignalOnChange!x) &&
+                !(__traits(compiles,IsValueChangedSlots!x) && IsValueChangedSlots!x) &&
                 !(__traits(compiles,IsConstnessView!x) && IsConstnessView!x) &&
                 !(__traits(compiles,IsAllocator!x) && IsAllocator!x)) {
             res ~= i;
@@ -4973,8 +4974,8 @@ if(IndexedByAllIndeces!(FindIndexedBy!Args)().length != 0) {
 }
 
 class MultiIndexContainer(Value, Args...)
-if(SignalOnChangeCount!(Args)() > 1) {
-    static assert(false, "Multiple SignalOnChange specifications are not allowed");
+if(ValueChangedSlotsCount!(Args)() > 1) {
+    static assert(false, "Multiple ValueChangedSlots specifications are not allowed");
 }
 
 class MultiIndexContainer(Value, Args...)
@@ -5048,15 +5049,15 @@ if(IndexedByCount!(Args)() == 1 &&
    FindIndexedBy!Args .List.length != 0 &&
    IndexedByAllIndeces!(FindIndexedBy!Args)().length == 0 &&
    _AllUnique!(FindIndexedBy!Args .Names) &&
-   SignalOnChangeCount!(Args)() <= 1 &&
+   ValueChangedSlotsCount!(Args)() <= 1 &&
    ConstnessViewCount!(Args)() <= 1 &&
    AllocatorCount!(Args)() <= 1 &&
    IndexGarbage!(Args)().length == 0) {
 
     alias FindIndexedBy!Args IndexedBy;
     // @@@ DMD ISSUE 6475 @@@ following gives forward reference error
-    //alias FindSignalOnChange!Args .Inner!(IndexedBy) NormSignals;
-    alias typeof(FindSignalOnChange!Args .Inner!(IndexedBy).exposeType()) NormSignals;
+    //alias FindValueChangedSlots!Args .Inner!(IndexedBy) NormSignals;
+    alias typeof(FindValueChangedSlots!Args .Inner!(IndexedBy).exposeType()) NormSignals;
     alias FindConstnessView!Args ConstnessView;
     alias FindAllocator!Args Allocator;
 
@@ -5423,6 +5424,31 @@ denied:
     }
 }
 
+/// simple Slot implementation
+mixin template Slots() {
+    void delegate()[] slots;
+
+    void connect(void delegate() slot){
+        slots ~= slot;
+    }
+    void disconnect(void delegate() slot){
+        size_t index = slots.length;
+        foreach(i, slot1; slots){
+            if(slot is slot1){
+                index = i;
+                moveAll(slots[i+1 .. $], slots[i .. $-1]);
+                slots.length-=1;
+                break;
+            }
+        }
+    }
+    void emit(){
+        foreach(slot; slots){
+            slot();
+        }
+    }
+}
+
 import std.stdio;
 
 int[] arr(Range)(Range r){
@@ -5465,7 +5491,7 @@ void main(){
             IndexedBy!(Sequenced!(),
                 OrderedUnique!("a.s")
                 ),
-            SignalOnChange!(ValueSignal!(1))) C;
+            ValueChangedSlots!(ValueSignal!(1))) C;
 
     C i = new C;
 
