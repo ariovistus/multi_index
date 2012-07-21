@@ -795,7 +795,7 @@ module multi_index;
  *  fix BitHackery
  *  make MutableView a per index thing?
  *  modify(r, mod, rollback)
- *  tagging
+ *  contain const/immutable value types
  *  other indeces? 
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
