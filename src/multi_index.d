@@ -920,10 +920,23 @@ template Sequenced() {
 Defines the index' primary range, which embodies a
 bidirectional range 
 */
-        struct Range{
-            ThisContainer c;
-            ThisNode* _front, _back;
+        struct SequencedRange(bool is_const) {
+            static if(is_const) {
+                alias const(ThisNode) Node;
+                alias const(ThisContainer) Container;
+            }else {
+                alias ThisContainer Container;
+                alias ThisNode Node;
+            }
+            Container c;
+            Node* _front, _back;
             alias _front node;
+
+            this(Container _c, Node* f, Node* b) {
+                c = _c;
+                _front = f;
+                _back = b;
+            }
 
             @property bool empty() {
                 return 
@@ -931,14 +944,14 @@ bidirectional range
                     _front !is _back.index!N.next &&
                     _back !is _front.index!N.prev);
             }
-            @property ValueView front(){
+            @property front(){
                 return _front.value;
             }
-            @property ValueView back(){
+            @property back(){
                 return _back.value;
             }
 
-            Range save(){ return this; }
+            @property save(){ return this; }
 
             void popFront()
             in{
@@ -951,6 +964,7 @@ bidirectional range
                 _back = _back.index!N.prev;
             }
 
+            static if(!is_const) {
 /**
 Pops front and removes it from the container.
 Does not invalidate this range.
@@ -958,7 +972,7 @@ Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
 */
             void removeFront(){
-                ThisNode* node = _front;
+                Node* node = _front;
                 popFront();
                 c._RemoveAll(node);
             }
@@ -970,13 +984,14 @@ Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
 */
             void removeBack(){
-                ThisNode* node = _back;
+                Node* node = _back;
                 popBack();
                 c._RemoveAll(node);
             }
+            }
         }
 
-        alias TypeTuple!(N,Range) IndexTuple;
+        alias TypeTuple!(N,SequencedRange) IndexTuple;
         alias TypeTuple!(N) NodeTuple;
 
         // node implementation 
@@ -1049,7 +1064,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
                 }
         }
 
- /// index implementation 
+ /// Sequenced index implementation 
  ///
  /// Requirements: the following symbols must be  
  /// defined in the scope in which this index is mixed in:
@@ -1057,12 +1072,15 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
  // dangit, ddoc, show my single starting underscore!
  /// ThisNode, Value, __InsertAllBut!N, __InsertAll,  __Replace, 
  /// __RemoveAllBut!N, node_count
-        mixin template IndexMixin(size_t N, Range_0){
+        mixin template IndexMixin(size_t N, alias Range_0){
             ThisNode* _front, _back;
-            alias Range_0 Range;
+            alias Range_0!false SeqRange;
+            alias Range_0!true ConstSeqRange;
 
             template IsMyRange(T) {
-                enum bool IsMyRange = is(T == Range);
+                enum bool IsMyRange = 
+                    is(T == SeqRange) || 
+                    is(T == ConstSeqRange);
             }
 
 /**
@@ -1080,7 +1098,7 @@ elements.
 
 Complexity: $(BIGOH 1)
 */
-            @property bool empty(){
+            @property bool empty() const{
                 return node_count == 0;
             }
 
@@ -1089,14 +1107,18 @@ Fetch a range that spans all the elements in the container.
 
 Complexity: $(BIGOH 1)
 */
-            Range opSlice(){
-                return Range(this, _front, _back);
+            SeqRange opSlice(){
+                return SeqRange(this, _front, _back);
+            }
+
+            ConstSeqRange opSlice() const{
+                return ConstSeqRange(this, _front, _back);
             }
 
 /**
 Complexity: $(BIGOH 1)
 */ 
-            @property ValueView front(){
+            @property front() inout{
                 return _front.value;
             }
 
@@ -1111,7 +1133,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
             /**
              * Complexity: $(BIGOH 1)
              */
-            @property ValueView back() {
+            @property back() inout{
                 return _back.value;
             }
 
@@ -1136,7 +1158,7 @@ Preconditions: moveme and tohere are both ranges of the same container.
 Postconditions: moveme.front is incremented
 Complexity: $(BIGOH 1)
 */
-            void relocateFront(ref Range moveme, Range tohere)
+            void relocateFront(ref SeqRange moveme, SeqRange tohere)
             in{
                 assert(moveme.c == tohere.c);
                 assert(moveme.node);
@@ -1158,7 +1180,7 @@ Preconditions: moveme and tohere are both ranges of the same container
 Postconditions: moveme.back is decremented
 Complexity: $(BIGOH 1)
 */
-            void relocateBack(ref Range moveme, Range tohere)
+            void relocateBack(ref SeqRange moveme, SeqRange tohere)
             in{
                 assert(moveme.c == tohere.c);
                 assert(moveme.node);
@@ -1184,9 +1206,9 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-            if(is(SomeRange == Range) || 
-                    is(SomeRange == typeof(retro(Range.init)))) {
-                static if(is(SomeRange == Range)){
+            if(is(SomeRange == SeqRange) || 
+                    is(SomeRange == typeof(retro(SeqRange.init)))) {
+                static if(is(SomeRange == SeqRange)){
                     ThisNode* node = r.node;
                 }else{
                     ThisNode* node = r.source._back;
@@ -1200,9 +1222,9 @@ Returns: whether replacement succeeded
 Complexity: ??
 */
             bool replace(SomeRange)(SomeRange r, Value value)
-            if(is(SomeRange == Range) || 
-                    is(SomeRange == typeof(retro(Range.init)))){
-                static if(is(SomeRange == Range)){
+            if(is(SomeRange == SeqRange) || 
+                    is(SomeRange == typeof(retro(SeqRange.init)))){
+                static if(is(SomeRange == SeqRange)){
                     ThisNode* node = r.node;
                 }else{
                     ThisNode* node = r.source._back;
@@ -1384,11 +1406,11 @@ Removes the values of r from the container.
 Preconditions: r came from this index
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 +/
-            Range remove(R)(R r)
-            if(is(R == Range) || is(R == Take!Range))
+            SeqRange remove(R)(R r)
+            if(is(R == SeqRange) || is(R == Take!SeqRange))
             {
                 while(!r.empty){
-                    static if(is(R == Range)){
+                    static if(is(R == SeqRange)){
                         ThisNode* f = r._front;
                     }else{
                         ThisNode* f = r.source._front;
@@ -1396,7 +1418,7 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                     r.popFront();
                     _RemoveAll(f);
                 }
-                return Range(null,null);
+                return SeqRange(this,null,null);
             }
 
             void _Check(){
@@ -1413,8 +1435,8 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 return r;
             }
 
-            private Range fromNode(ThisNode* n){
-                return Range(this, n, this.index!N._back);
+            private SeqRange fromNode(ThisNode* n){
+                return SeqRange(this, n, this.index!N._back);
             }
         }
 
@@ -1445,50 +1467,62 @@ template RandomAccess() {
         mixin template IndexMixin(size_t N, ThisContainer){
             ThisNode*[] ra;
 
-            template IsMyRange(T) {
-                enum bool IsMyRange = is(T == Range);
-            }
-
             /// Defines the index' primary range, which embodies a
             /// random access range 
-            struct Range{
-                ThisContainer c;
+            struct RARangeT(bool is_const) {
+                static if(is_const) {
+                    alias const(ThisNode) Node;
+                    alias const(ThisContainer) Container;
+                }else {
+                    alias ThisContainer Container;
+                    alias ThisNode Node;
+                }
+                Container c;
                 size_t s, e;
 
-                @property ThisNode* node(){
+                this(Container _c, size_t _s, size_t _e) {
+                    c = _c;
+                    s = _s;
+                    e = _e;
+                }
+
+                @property Node* node(){
                     return c.index!N.ra[s];
                 }
 
-                @property ValueView front(){ 
+                @property front(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[s].value; 
                 }
 
                 void popFront(){ s++; }
 
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
+                static if(!is_const) {
+                /**
+                  Pops front and removes it from the container.
+                  Does not invalidate this range.
 Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
-*/
+                 */
                 void removeFront(){
-                    ThisNode* node = c.index!N.ra[s];
+                    Node* node = c.index!N.ra[s];
                     c._RemoveAll(node);
                     // c will shift everything down
                     e--;
+                }
                 }
 
                 @property bool empty()const{ return s >= e; }
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
-                @property ValueView back(){ 
+                @property back(){ 
                     assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[e-1].value;
                 }
 
                 void popBack(){ e--; }
 
+                static if(!is_const) {
 /**
 Pops front and removes it from the container.
 Does not invalidate this range.
@@ -1496,24 +1530,38 @@ Preconditions: !empty
 Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 */
                 void removeBack(){ 
-                    ThisNode* node = c.index!N.ra[e-1];
+                    Node* node = c.index!N.ra[e-1];
                     c._RemoveAll(node);
                     // c will shift everything down
                     e--;
                 }
+                }
 
-                Range save(){ return this; }
+                @property save(){ return this; }
 
-                ValueView opIndex(size_t i){ return c.index!N.ra[i].value; }
+                auto opIndex(size_t i){ return c.index!N.ra[i].value; }
             }
+
+            alias RARangeT!true ConstRARange;
+            alias RARangeT!false RARange;
+
+            template IsMyRange(T) {
+                enum bool IsMyRange = 
+                    is(T == RARange) || 
+                    is(T == ConstRARange);
+            }
+
 
 /**
 Fetch a range that spans all the elements in the container.
 
 Complexity: $(BIGOH 1)
 */
-            Range opSlice (){
-                return Range(this, 0, node_count);
+            RARange opSlice (){
+                return RARange(this, 0, node_count);
+            }
+            ConstRARange opSlice () const{
+                return ConstRARange(this, 0, node_count);
             }
 
 /**
@@ -1523,9 +1571,13 @@ Preconditions: a <= b && b <= length
 
 Complexity: $(BIGOH 1)
 */
-            Range opSlice(size_t a, size_t b){
+            RARange opSlice(size_t a, size_t b){
                 enforce(a <= b && b <= length);
-                return Range(this, a, b);
+                return RARange(this, a, b);
+            }
+            ConstRARange opSlice(size_t a, size_t b) const{
+                enforce(a <= b && b <= length);
+                return ConstRARange(this, a, b);
             }
 
 /**
@@ -1542,7 +1594,7 @@ Property returning $(D true) if and only if the container has no elements.
 
 Complexity: $(BIGOH 1)
 */
-            @property bool empty() {
+            @property bool empty() const{
                 return node_count == 0;
             }
 
@@ -1550,7 +1602,7 @@ Complexity: $(BIGOH 1)
 Returns the _capacity of the index, which is the length of the
 underlying store 
 */
-            @property size_t capacity(){
+            @property size_t capacity() const{
                 return ra.length;
             }
 
@@ -1575,7 +1627,7 @@ otherwise $(BIGOH 1).
 /**
 Complexity: $(BIGOH 1)
 */
-            @property ValueView front(){
+            @property front() inout{
                 return ra[0].value;
             }
 
@@ -1589,7 +1641,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 /**
 Complexity: $(BIGOH 1)
 */
-            @property ValueView back(){
+            @property back() inout{
                 return ra[node_count-1].value;
             }
 
@@ -1613,7 +1665,7 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 Preconditions: i < length
 Complexity: $(BIGOH 1)
 */
-            ValueView opIndex(size_t i){
+            auto opIndex(size_t i) inout{
                 enforce(i < length);
                 return ra[i].value;
             }
@@ -1723,9 +1775,9 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-            if(is(SomeRange == Range) || 
-                    is(SomeRange == typeof(retro(Range.init)))) {
-                static if(is(SomeRange == Range)){
+            if(is(SomeRange == RARange) || 
+                    is(SomeRange == typeof(retro(RARange.init)))) {
+                static if(is(SomeRange == RARange)){
                     ThisNode* node = r.node;
                 }else{
                     ThisNode* node = ra[r.source.e-1];
@@ -1753,7 +1805,8 @@ removes elements of r from this container.
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n)
 for this index
 */
-            Range linearRemove(Range r){
+            RARange linearRemove(Range)(Range r)
+            if(IsMyRange!Range) {
                 size_t _length = node_count;
                 size_t s = r.s;
                 size_t e = r.e;
@@ -1767,7 +1820,7 @@ for this index
                 copy(ra[e .. _length], ra[s .. newlen]);
                 fill(ra[newlen .. _length], cast(ThisNode*) null);
                 _length -= e-s;
-                return Range(this, s, _length);
+                return RARange(this, s, _length);
             }
 
             void _Check(){
@@ -1784,7 +1837,7 @@ for this index
                 return r;
             }
 
-            private Range fromNode(ThisNode* n){
+            private RARange fromNode(ThisNode* n){
                 // Oh NO! linear search!
                 size_t ix = -1;
                 foreach(i,_n; this.index!N.ra){
@@ -1793,7 +1846,7 @@ for this index
                         break;
                     }
                 }
-                return Range(this, ix, this.node_count);
+                return RARange(this, ix, this.node_count);
             }
         }
     }
@@ -1850,7 +1903,7 @@ version(PtrHackery){
     /**
      * Get the left child
      */
-    @property Node left()
+    @property inout(typeof(this))* left() inout
     {
         return _left;
     }
@@ -1858,7 +1911,7 @@ version(PtrHackery){
     /**
      * Get the right child
      */
-    @property Node right()
+    @property inout(typeof(this))* right() inout
     {
         return _right;
     }
@@ -2295,9 +2348,9 @@ version(PtrHackery){
     /**
      * Return the leftmost descendant of this node.
      */
-    @property Node leftmost()
+    @property leftmost() inout
     {
-        Node result = &this;
+        typeof(this)* result = &this;
         while(result.index!N._left !is null)
             result = result.index!N._left;
         return result;
@@ -2306,9 +2359,9 @@ version(PtrHackery){
     /**
      * Return the rightmost descendant of this node
      */
-    @property Node rightmost()
+    @property rightmost() inout
     {
-        Node result = &this;
+        auto result = &this;
         while(result.index!N._right !is null)
             result = result.index!N._right;
         return result;
@@ -2328,12 +2381,12 @@ version(PtrHackery){
      * You should never call this on the marker node, as it is assumed that
      * there is a valid next node.
      */
-    @property Node next()
+    @property inout(typeof(this))* next() inout
     in{
         debug assert( &this !is this.index!N.parentmost.index!N.rightmost, 
             "calling prev on _end.rightmost");
     }body{
-        Node n = &this;
+        auto n = &this;
         if(n.index!N.right is null)
         {
             while(!n.index!N.isLeftNode)
@@ -2350,17 +2403,18 @@ version(PtrHackery){
      * You should never call this on the leftmost node of the tree as it is
      * assumed that there is a valid previous node.
      */
-    @property Node prev()
+    @property inout(typeof(this))* prev() inout
     in{
         debug assert( &this !is this.index!N.parentmost.index!N.leftmost, 
             "calling prev on _end.leftmost");
     }body{
-        Node n = &this;
+        auto n = &this;
         if(n.index!N.left is null)
         {
             while(n.index!N.isLeftNode)
                 n = n.index!N._parent;
-            return n.index!N._parent;
+            n = n.index!N._parent;
+            return n;
         }
         else
             return n.index!N.left.index!N.rightmost;
@@ -2378,8 +2432,115 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
     alias unaryFun!KeyFromValue key;
     alias typeof(key(Value.init)) KeyType;
 
+    /**
+     * The range type for this index, which embodies a bidirectional range
+     */
+    struct OrderedRangeT(bool is_const)
+    {
+        static if(is_const) {
+            alias const(ThisNode) Node;
+            alias const(ThisContainer) Container;
+        }else {
+            alias ThisContainer Container;
+            alias ThisNode Node;
+        }
+        Container c;   
+        private Node* _begin;
+        alias _begin node;
+        private Node* _end;
+
+        this(Container _c, Node* b, Node* e) {
+            c = _c;
+            _begin = b;
+            _end = e;
+        }
+
+        /**
+         * Returns $(D true) if the range is _empty
+         */
+        @property bool empty() const
+        {
+            return _begin is _end;
+        }
+
+        /**
+         * Returns the first element in the range
+         */
+        @property front() 
+        {
+            return _begin.value;
+        }
+
+        /**
+         * Returns the last element in the range
+         */
+        @property back() 
+        {
+            return _end.index!N.prev.value;
+        }
+
+        /**
+         * pop the front element from the range
+         *
+         * complexity: amortized $(BIGOH 1)
+         */
+        void popFront()
+        {
+            _begin = _begin.index!N.next;
+        }
+
+        /**
+         * pop the back element from the range
+         *
+         * complexity: amortized $(BIGOH 1)
+         */
+        void popBack()
+        {
+            _end = _end.index!N.prev;
+        }
+
+        static if(!is_const) {
+/**
+Pops front and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
+*/
+        void removeFront(){
+            Node* node = _begin;
+            popFront();
+            c._RemoveAll(node);
+        }
+/**
+Pops back and removes it from the container.
+Does not invalidate this range.
+Preconditions: !empty
+Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
+*/
+        void removeBack(){
+            Node* node = _end.index!N.prev;
+            popBack();
+            c._RemoveAllBut!N(node);
+            _end = c.index!N._Remove(node);
+        }
+        }
+
+        /**
+         * Trivial _save implementation, needed for $(D isForwardRange).
+         */
+        @property save()
+        {
+            return this;
+        }
+    }
+
+    alias OrderedRangeT!true ConstOrderedRange;
+    alias OrderedRangeT!false OrderedRange;
+
     template IsMyRange(T) {
-        enum bool IsMyRange = is(T == Range);
+        enum bool IsMyRange = 
+            is(T == OrderedRange) || 
+            is(T == ConstOrderedRange);
     }
 
     auto _add(Node n)
@@ -2477,103 +2638,19 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
 
     }
 
-    /**
-     * The range type for this index, which embodies a bidirectional range
-     */
-    struct Range
-    {
-        ThisContainer c;   
-        private Node _begin;
-        alias _begin node;
-        private Node _end;
-
-        /**
-         * Returns $(D true) if the range is _empty
-         */
-        @property bool empty() const
-        {
-            return _begin is _end;
-        }
-
-        /**
-         * Returns the first element in the range
-         */
-        @property Elem front()
-        {
-            return _begin.value;
-        }
-
-        /**
-         * Returns the last element in the range
-         */
-        @property Elem back()
-        {
-            return _end.index!N.prev.value;
-        }
-
-        /**
-         * pop the front element from the range
-         *
-         * complexity: amortized $(BIGOH 1)
-         */
-        void popFront()
-        {
-            _begin = _begin.index!N.next;
-        }
-
-        /**
-         * pop the back element from the range
-         *
-         * complexity: amortized $(BIGOH 1)
-         */
-        void popBack()
-        {
-            _end = _end.index!N.prev;
-        }
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
-*/
-        void removeFront(){
-            Node node = _begin;
-            popFront();
-            c._RemoveAll(node);
-        }
-/**
-Pops back and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
-*/
-        void removeBack(){
-            Node node = _end.index!N.prev;
-            popBack();
-            c._RemoveAllBut!N(node);
-            _end = c.index!N._Remove(node);
-        }
-
-        /**
-         * Trivial _save implementation, needed for $(D isForwardRange).
-         */
-        @property Range save()
-        {
-            return this;
-        }
-    }
 
     // if k exists in this index, returns par such that eq(key(par.value),k), 
     // and returns true
     // if k !exists in this index, returns par such that k value belongs either
     // as par.left or par.right. remember to setColor! returns false.
-    private bool _find2(KeyType k, out Node par)
+    private bool _find2(KeyType k, out inout(ThisNode)* par) inout
     {
-        Node cur = _end.index!N.left;
+        auto cur = _end.index!N.left;
         par = null;
         while(cur)
         {
-            auto ck = key(cur.value);
+            // BAD!!! TODO: figure out unaryFun & inout
+            auto ck = key(cast() cur.value);
             par = cur;
             if(_less(ck, k)){
                 cur = cur.index!N.right;
@@ -2609,7 +2686,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH log(n)) for this index
      * one element exists.
      * Complexity: $(BIGOH 1)
      */
-    @property bool empty()
+    @property bool empty() const
     {
         return node_count == 0;
     }
@@ -2619,7 +2696,7 @@ Returns the number of elements in the container.
 
 Complexity: $(BIGOH 1).
 +/
-        @property size_t length()const
+        @property size_t length() const
         {
             return node_count;
         }
@@ -2629,9 +2706,13 @@ Complexity: $(BIGOH 1).
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range opSlice()
+    OrderedRange opSlice()
     {
-        return Range(this,_end.index!N.leftmost, _end);
+        return OrderedRange(this,_end.index!N.leftmost, _end);
+    }
+
+    ConstOrderedRange opSlice() const{
+        return ConstOrderedRange(this,_end.index!N.leftmost, _end);
     }
 
     /**
@@ -2639,7 +2720,7 @@ Complexity: $(BIGOH 1).
      *
      * Complexity: $(BIGOH log(n))
      */
-    @property Elem front()
+    @property front() inout
     {
         return _end.index!N.leftmost.value;
     }
@@ -2649,7 +2730,7 @@ Complexity: $(BIGOH 1).
      *
      * Complexity: $(BIGOH log(n))
      */
-    @property Elem back()
+    @property back() inout
     {
         return _end.index!N.prev.value;
     }
@@ -2660,7 +2741,8 @@ Complexity: $(BIGOH 1).
 
         Complexity: $(BIGOH log(n))
         +/
-        bool opBinaryRight(string op)(Elem e) if (op == "in")
+        bool opBinaryRight(string op)(Elem e) const
+        if (op == "in") 
         {
             Node p;
             return _find2(key(e),p);
@@ -2700,7 +2782,7 @@ Available for Unique variant.
 Complexity:
 $(BIGOH log(n))
 */
-        ValueView opIndex(KeyType k){
+        ValueView opIndex(KeyType k) inout{
             Node n; 
             enforce(_find2(k,n));
             return n.value;
@@ -2717,7 +2799,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 */
 
     void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-    if(is(SomeRange == Range)) {
+    if(is(SomeRange == OrderedRange)) {
         Node node = r.node;
         _Modify(node, mod);
     }
@@ -2726,7 +2808,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-    bool replace(Range r, ValueView value) {
+    bool replace(OrderedRange r, ValueView value) {
         ThisNode* node = r.node;
         return _Replace(node, cast(Value) value);
     }
@@ -2745,7 +2827,7 @@ Complexity: ??
         if(!_less(newPosition, oldPosition) && 
            !_less(oldPosition, newPosition)) return true;
         Node next = _end.index!N.rightmost is node ? null : node.index!N.next;
-        Node prev = _end.index!N.leftmost  is node ? null : node.index!N.prev;
+        auto prev = _end.index!N.leftmost is node ? null : node.index!N.prev;
         
         // case 2: key has changed, but relative position hasn't
         bool outOfBounds = (next && next != _end &&
@@ -2942,7 +3024,7 @@ Complexity: ??
         Complexity:$(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
                 log(n)) for this index
     +/
-    Range remove(Range r)
+    OrderedRange remove(OrderedRange r)
     out(r){
         version(RBDoChecks) _Check();
     }body{
@@ -2952,11 +3034,11 @@ Complexity: ??
         {
             b = _RemoveAll!N(b);
         }
-        return Range(this, e, _end);
+        return OrderedRange(this, e, _end);
     }
 
     /++
-        Removes the given $(D Take!Range) from the container
+        Removes the given $(D Take!OrderedRange) from the container
 
         Returns: A range containing all of the elements that were after the
         given range.
@@ -2964,7 +3046,7 @@ Complexity: ??
         Complexity: $(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
                 log(n)) for this index 
     +/
-    Range remove(Take!Range r)
+    OrderedRange remove(Take!OrderedRange r)
     out(r){
         version(RBDoChecks) _Check();
     }body{
@@ -2980,7 +3062,7 @@ Complexity: ??
             b = _RemoveAll!N(b);
         }
 
-        return Range(this, e, _end);
+        return OrderedRange(this, e, _end);
     }
 
     /++
@@ -3060,15 +3142,16 @@ Complexity: ??
     }
 
     // find the first node where the value is > k
-    private Node _firstGreater(U)(U k)
+    private inout(ThisNode)* _firstGreater(U)(U k) inout
     if(isImplicitlyConvertible!(U, KeyType))
     {
         // can't use _find, because we cannot return null
-        auto cur = _end.index!N.left;
-        auto result = _end;
+        typeof(return) cur = _end.index!N.left;
+        typeof(return) result = _end;
         while(cur)
         {
-            if(_less(k, key(cur.value)))
+            // TODO: figure out unaryFun & inout
+            if(_less(k, key(cast() cur.value)))
             {
                 result = cur;
                 cur = cur.index!N.left;
@@ -3080,15 +3163,16 @@ Complexity: ??
     }
 
     // find the first node where the value is >= k
-    private Node _firstGreaterEqual(U)(U k)
+    private inout(ThisNode)* _firstGreaterEqual(U)(U k) inout
     if(isImplicitlyConvertible!(U, KeyType))
     {
         // can't use _find, because we cannot return null.
-        auto cur = _end.index!N.left;
-        auto result = _end;
+        typeof(return) cur = _end.index!N.left;
+        typeof(return) result = _end;
         while(cur)
         {
-            if(_less(key(cur.value), k))
+            // TODO: figure out unaryFun & inout
+            if(_less(key(cast() cur.value), k))
                 cur = cur.index!N.right;
             else
             {
@@ -3106,10 +3190,15 @@ Complexity: ??
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range upperBound(U)(U k)
+    auto upperBound(U)(U k) 
     if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(this,_firstGreater(k), _end);
+        return OrderedRange(this,_firstGreater(k), _end);
+    }
+    auto upperBound(U)(U k) const 
+    if(isImplicitlyConvertible!(U, KeyType))
+    {
+        return ConstOrderedRange(this,_firstGreater(k), _end);
     }
 
     /**
@@ -3118,10 +3207,15 @@ Complexity: ??
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range lowerBound(U)(U k)
+    auto lowerBound(U)(U k) 
     if(isImplicitlyConvertible!(U, KeyType))
     {
-        return Range(this,_end.index!N.leftmost, _firstGreaterEqual(k));
+        return OrderedRange(this,_end.index!N.leftmost, _firstGreaterEqual(k));
+    }
+    auto lowerBound(U)(U k) const
+    if(isImplicitlyConvertible!(U, KeyType))
+    {
+        return ConstOrderedRange(this,_end.index!N.leftmost, _firstGreaterEqual(k));
     }
 
     /**
@@ -3130,22 +3224,41 @@ Complexity: ??
      *
      * Complexity: $(BIGOH log(n))
      */
-    Range equalRange(U)(U k)
+    // TODO: compact these back into one
+    auto equalRange(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType))
     {
         auto beg = _firstGreaterEqual(k);
         if(beg is _end || _less(k, key(beg.value)))
             // no values are equal
-            return Range(this,beg, beg);
+            return OrderedRange(this,beg, beg);
         static if(allowDuplicates)
         {
-            return Range(this,beg, _firstGreater(k));
+            return OrderedRange(this,beg, _firstGreater(k));
         }
         else
         {
             // no sense in doing a full search, no duplicates are allowed,
             // so we just get the next node.
-            return Range(this,beg, beg.index!N.next);
+            return OrderedRange(this,beg, beg.index!N.next);
+        }
+    }
+    auto equalRange(U)(U k) const
+    if(isImplicitlyConvertible!(U, KeyType))
+    {
+        auto beg = _firstGreaterEqual(k);
+        if(beg is _end || _less(k, key(beg.value)))
+            // no values are equal
+            return ConstOrderedRange(this,beg, beg);
+        static if(allowDuplicates)
+        {
+            return ConstOrderedRange(this,beg, _firstGreater(k));
+        }
+        else
+        {
+            // no sense in doing a full search, no duplicates are allowed,
+            // so we just get the next node.
+            return ConstOrderedRange(this,beg, beg.index!N.next);
         }
     }
 
@@ -3154,22 +3267,41 @@ Get a range of values bounded below by lower and above by upper, with
 inclusiveness defined by boundaries.
 Complexity: $(BIGOH log(n))
 +/
-    Range bounds(string boundaries = "[]", U)(U lower, U upper)
+    auto bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType))
     in{
         static if(boundaries == "[]") assert(!_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
         else assert(_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
     }body{
         static if(boundaries == "[]"){
-            return Range(this,_firstGreaterEqual(lower), _firstGreater(upper));
+            return OrderedRange(this,_firstGreaterEqual(lower), _firstGreater(upper));
         }else static if(boundaries == "[)"){
-            return Range(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
+            return OrderedRange(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
         }else static if(boundaries == "(]"){
-            return Range(this, _firstGreater(lower), _firstGreater(upper));
+            return OrderedRange(this, _firstGreater(lower), _firstGreater(upper));
         }else static if(boundaries == "()"){
-            return Range(this, _firstGreater(lower), _firstGreaterEqual(upper));
+            return OrderedRange(this, _firstGreater(lower), _firstGreaterEqual(upper));
         }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
     }
+
+/+
+    auto bounds(string boundaries = "[]", U)(U lower, U upper) const
+    if(isImplicitlyConvertible!(U, KeyType))
+    in{
+        static if(boundaries == "[]") assert(!_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+        else assert(_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+    }body{
+        static if(boundaries == "[]"){
+            return ConstOrderedRange(this,_firstGreaterEqual(lower), _firstGreater(upper));
+        }else static if(boundaries == "[)"){
+            return ConstOrderedRange(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
+        }else static if(boundaries == "(]"){
+            return ConstOrderedRange(this, _firstGreater(lower), _firstGreater(upper));
+        }else static if(boundaries == "()"){
+            return ConstOrderedRange(this, _firstGreater(lower), _firstGreaterEqual(upper));
+        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
+    }
++/
 
         /*
          * Print the tree.  This prints a sideways view of the tree in ASCII form,
@@ -3268,8 +3400,8 @@ Complexity: $(BIGOH log(n))
             return r;
         }
         
-        private Range fromNode(ThisNode* n){
-            return Range(this,n, this.index!N._end);
+        private OrderedRange fromNode(ThisNode* n){
+            return OrderedRange(this,n, this.index!N._end);
         }
 }
 
@@ -3325,8 +3457,67 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
             alias binaryFun!Compare less;
             alias typeof(key((Value).init)) KeyType;
 
+            /// The primary range of the index, which embodies a bidirectional
+            /// range. 
+            ///
+            /// Ends up performing a breadth first traversal (I think..)
+            ///
+            /// removeFront and removeBack are not possible.
+            struct HeapRangeT(bool is_const) {
+                static if(is_const) {
+                    alias const(ThisNode) Node;
+                    alias const(ThisContainer) Container;
+                }else {
+                    alias ThisContainer Container;
+                    alias ThisNode Node;
+                }
+                Container c;
+                size_t s,e;
+
+                this(Container _c, size_t _s, size_t _e) {
+                    c = _c;
+                    s = _s;
+                    e = _e;
+                }
+
+                @property Node* node() {
+                    return c.index!N._heap[s];
+                }
+
+                @property front(){ 
+                    return c.index!N._heap[s].value; 
+                }
+
+                void popFront(){ 
+                    s++;
+                }
+
+                @property back(){
+                    return c.index!N._heap[e-1].value; 
+                }
+                void popBack(){ 
+                    e--;
+                }
+
+                @property bool empty()const{ 
+                    assert(e <= c.index!N.length);
+                    return s >= c.index!N.length; 
+                }
+                @property size_t length()const{ 
+                    assert(e <= c.index!N.length);
+                    return s <= e ? e - s : 0;
+                }
+
+                @property save(){ return this; }
+            }
+
+            alias HeapRangeT!true ConstHeapRange;
+            alias HeapRangeT!false HeapRange;
+
             template IsMyRange(T) {
-                enum bool IsMyRange = is(T == Range);
+                enum bool IsMyRange = 
+                    is(T == ConstHeapRange) ||
+                    is(T == HeapRange);
             }
 
             ThisNode*[] _heap;
@@ -3373,54 +3564,17 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
             }
 
 
-            /// The primary range of the index, which embodies a bidirectional
-            /// range. 
-            ///
-            /// Ends up performing a breadth first traversal (I think..)
-            ///
-            /// removeFront and removeBack are not possible.
-            struct Range{
-                ThisContainer c;
-                size_t s,e;
-
-                @property ThisNode* node(){
-                    return c.index!N._heap[s];
-                }
-
-                @property ValueView front(){ 
-                    return c.index!N._heap[s].value; 
-                }
-
-                void popFront(){ 
-                    s++;
-                }
-
-                @property ValueView back(){
-                    return c.index!N._heap[e-1].value; 
-                }
-                void popBack(){ 
-                    e--;
-                }
-
-                @property bool empty()const{ 
-                    assert(e <= c.index!N.length);
-                    return s >= c.index!N.length; 
-                }
-                @property size_t length()const{ 
-                    assert(e <= c.index!N.length);
-                    return s <= e ? e - s : 0;
-                }
-
-                Range save(){ return this; }
-            }
 
 /**
 Fetch a range that spans all the elements in the container.
 
 Complexity: $(BIGOH 1)
 */
-            Range opSlice(){
-                return Range(this,0, node_count);
+            HeapRange opSlice() {
+                return HeapRange(this,0, node_count);
+            }
+            ConstHeapRange opSlice() const{
+                return ConstHeapRange(this,0, node_count);
             }
 
 /**
@@ -3446,14 +3600,14 @@ Complexity: $(BIGOH 1)
 Returns: the max element in this index
 Complexity: $(BIGOH 1)
 */ 
-            @property ValueView front(){
+            @property front() inout{
                 return _heap[0].value;
             }
 /**
 Returns: the back of this index
 Complexity: $(BIGOH 1)
 */ 
-            @property ValueView back(){
+            @property back() inout{
                 return _heap[node_count-1].value;
             }
 
@@ -3477,7 +3631,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-                if(is(SomeRange == Range)) {
+                if(IsMyRange!SomeRange) {
                     ThisNode* node = r.node;
                     _Modify(node, mod);
                 }
@@ -3486,7 +3640,7 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(Range r, ValueView value)
+            bool replace(HeapRange r, ValueView value)
             {
                 ThisNode* node = r.node;
                 return _Replace(node, cast(Value) value);
@@ -3609,10 +3763,10 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 _RemoveAll(node);
             }
 
-            Range remove(R)(R r)
-            if (is(R == Range) || is(R == Take!Range)){
+            HeapRange remove(R)(R r)
+            if (is(R == HeapRange) || is(R == Take!HeapRange)){
                 while(!r.empty){
-                    static if(is(R == Range)){
+                    static if(is(R == HeapRange)){
                         ThisNode* node = r.node;
                     }else{
                         ThisNode* node = r.source.node;
@@ -3620,7 +3774,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                     r.popFront();
                     _RemoveAll(node);
                 }
-                return Range(this,0,0);
+                return HeapRange(this,0,0);
             }
 
             bool isLe(size_t a, size_t b){
@@ -3677,8 +3831,8 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                 return r;
             }
 
-            private Range fromNode(ThisNode* n){
-                return Range(this, n.index!N._index, this.node_count);
+            private HeapRange fromNode(ThisNode* n){
+                return HeapRange(this, n.index!N._index, this.node_count);
             }
         }
     }
@@ -3743,7 +3897,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         alias TypeTuple!(N) NodeTuple;
         alias TypeTuple!(N,KeyFromValue, _Hash, Eq, allowDuplicates, 
-                Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N,Allocator).Range, 
+                Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N,Allocator).SequencedRange, 
                 ThisContainer) IndexTuple;
         // node implementation 
         // could be singly linked, but that would make aux removal more 
@@ -3758,14 +3912,75 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
 
         /// index implementation
         mixin template IndexMixin(size_t N, alias KeyFromValue, alias Hash, 
-                alias Eq, bool allowDuplicates, ListRange, ThisContainer){
+                alias Eq, bool allowDuplicates, alias SeqRange, ThisContainer){
             alias unaryFun!KeyFromValue key;
             alias typeof(key((Value).init)) KeyType;
             alias unaryFun!Hash hash;
             alias binaryFun!Eq eq;
+            alias SeqRange!false BucketSeqRange;
+            alias SeqRange!true ConstBucketSeqRange;
+
+            /// the primary range for this index, which embodies a forward 
+            /// range. iteration has time complexity O(n) 
+            struct HashedRangeT(bool is_const) {
+                static if(is_const) {
+                    alias const(ThisNode) Node;
+                    alias const(ThisContainer) Container;
+                }else {
+                    alias ThisContainer Container;
+                    alias ThisNode Node;
+                }
+                Container c;
+                Node* node;
+                size_t n;
+
+                this(Container _c, Node* _node, size_t _n) {
+                    c = _c;
+                    node = _node;
+                    n = _n;
+                }
+
+                @property bool empty()/*const*/{
+                    return n >= c.index!N.hashes.length;
+                }
+
+                @property front() {
+                    return node.value;
+                }
+
+                void popFront(){
+                    node = node.index!N.next;
+                    if(!node){
+                        do n++;
+                        while(n < c.index!N.hashes.length && !c.index!N.hashes[n]);
+                        if( n < c.index!N.hashes.length ){
+                            node = c.index!N.hashes[n];
+                        }
+                    }
+                }
+
+                static if(!is_const) {
+                void removeFront(){
+                    ThisNode* n = node;
+                    popFront();
+                    c._RemoveAll(n);
+                }
+                }
+
+                @property save(){
+                    return this;
+                }
+            }
+
+            alias HashedRangeT!true ConstHashedRange;
+            alias HashedRangeT!false HashedRange;
 
             template IsMyRange(T) {
-                enum bool IsMyRange = is(T == Range) || is(T == ListRange);
+                enum bool IsMyRange = 
+                    is(T == HashedRange) || 
+                    is(T == ConstHashedRange) || 
+                    is(T == BucketSeqRange) ||
+                    is(T == ConstBucketSeqRange);
             }
 
             ThisNode*[] hashes;
@@ -3834,42 +4049,6 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 }
             }
 
-            /// the primary range for this index, which embodies a forward 
-            /// range. iteration has time complexity O(n) 
-            struct Range{
-                ThisContainer c;
-                ThisNode* node;
-                size_t n;
-
-                @property bool empty()/*const*/{
-                    return n >= c.index!N.hashes.length;
-                }
-
-                @property ValueView front()/*const*/{
-                    return node.value;
-                }
-
-                void popFront(){
-                    node = node.index!N.next;
-                    if(!node){
-                        do n++;
-                        while(n < c.index!N.hashes.length && !c.index!N.hashes[n]);
-                        if( n < c.index!N.hashes.length ){
-                            node = c.index!N.hashes[n];
-                        }
-                    }
-                }
-
-                void removeFront(){
-                    ThisNode* n = node;
-                    popFront();
-                    c._RemoveAll(n);
-                }
-
-                Range save(){
-                    return this;
-                }
-            }
 
 /**
 Returns the number of elements in the container.
@@ -3894,7 +4073,7 @@ Complexity: $(BIGOH 1)
 Preconditions: !empty
 Complexity: $(BIGOH 1) 
 */ 
-            @property ValueView front(){
+            @property front() inout{
                 return _first.value;
             }
     
@@ -3913,10 +4092,16 @@ Complexity: $(BIGOH 1)
 Gets a range of all elements in container.
 Complexity: $(BIGOH 1)
 */
-            Range opSlice(){
-                if(empty) return Range(this, null, hashes.length);
+            HashedRange opSlice(){
+                if(empty) return HashedRange(this, null, hashes.length);
                 auto ix = hash(key(_first.value))%hashes.length;
-                return Range(this, _first, ix);
+                return HashedRange(this, _first, ix);
+            }
+            ConstHashedRange opSlice() const{
+                if(empty) 
+                    return ConstHashedRange(this, null, hashes.length);
+                auto ix = hash(key(_first.value))%hashes.length;
+                return ConstHashedRange(this, _first, ix);
             }
 
             // returns true iff k was found.
@@ -3926,14 +4111,15 @@ Complexity: $(BIGOH 1)
             // node = null -> put value of k in hashes[ix]
             // or node is last node in hashes[ix] chain -> 
             //  put value of k in node.next 
-            bool _find(KeyType k, out ThisNode* node, out size_t index){
+            bool _find(KeyType k, out inout(ThisNode)* node, out size_t index) inout{
                 index = hash(k)%hashes.length;
                 if(!hashes[index]){
                     node = null;
                     return false;
                 }
                 node = hashes[index];
-                while(!eq(k, key(node.value))){
+                // TODO: figure out unaryFun & inout
+                while(!eq(k, key(cast()node.value))){
                     if (node.index!N.next is null){
                         return false;
                     }
@@ -3948,7 +4134,7 @@ Available for Unique variant.
 Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
 */
-                ValueView opIndex ( KeyType k ){
+                ValueView opIndex ( KeyType k ) const{
                     ThisNode* node;
                     size_t index;
                     enforce(_find(k, node, index));
@@ -3962,7 +4148,8 @@ Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
  */
             static if(!isImplicitlyConvertible!(KeyType, ValueView)){
-                bool opBinaryRight(string op)(KeyType k) if (op == "in")
+                bool opBinaryRight(string op)(KeyType k) const
+                if (op == "in")
                 {
                     ThisNode* node;
                     size_t index;
@@ -3975,7 +4162,8 @@ Reports whether value exists in this collection.
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool opBinaryRight(string op)(ValueView value) if (op == "in")
+            bool opBinaryRight(string op)(ValueView value) const
+            if (op == "in")
             {
                 ThisNode* node;
                 size_t index;
@@ -3987,14 +4175,14 @@ Reports whether value exists in this collection
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool contains(ValueView value){
+            bool contains(ValueView value) const{
                 ThisNode* node;
                 size_t index;
                 auto r =  _find(key(value), node,index);
                 return r;
             }
 
-            bool contains(KeyType k){
+            bool contains(KeyType k) const{
                 ThisNode* node;
                 size_t index;
                 return _find(k, node,index);
@@ -4010,7 +4198,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-            if(is(SomeRange == Range) || is(SomeRange == ListRange)) {
+            if(IsMyRange!SomeRange) {
                 ThisNode* node = r.node;
                 _Modify(node, mod);
             }
@@ -4020,7 +4208,7 @@ Returns: whether replacement succeeded
 Complexity: ??
 */
             bool replace(SomeRange)(SomeRange r, ValueView value)
-            if(is(SomeRange == Range) || is(SomeRange == ListRange)){
+            if(IsMyRange!SomeRange){
                 ThisNode* node = r.node;
                 return _Replace(node, cast(Value) value);
             }
@@ -4106,21 +4294,39 @@ Returns a range of all elements with eq(key(elem), k).
 Complexity:
 $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
  */
-            ListRange equalRange( KeyType k ){
+            // TODO: compact these back into one
+            BucketSeqRange equalRange( KeyType k ){
                 ThisNode* node;
                 size_t index;
                 if(!_find(k, node,index)){
-                    return ListRange(null,null);
+                    return BucketSeqRange(this,null,null);
                 }
                 static if(!allowDuplicates){
-                    return ListRange(this,node, node);
+                    return BucketSeqRange(this,node,node);
                 }else{
                     ThisNode* node2 = node;
                     while(node2.index!N.next !is null && 
                             eq(k, key(node2.index!N.next.value))){
                         node2 = node2.index!N.next;
                     }
-                    return ListRange(this, node, node2);
+                    return BucketSeqRange(this, node, node2);
+                }
+            }
+            ConstBucketSeqRange equalRange( KeyType k ) const{
+                ThisNode* node;
+                size_t index;
+                if(!_find(k, node,index)){
+                    return ConstBucketSeqRange(this,null,null);
+                }
+                static if(!allowDuplicates){
+                    return ConstBucketSeqRange(this,node,node);
+                }else{
+                    ThisNode* node2 = node;
+                    while(node2.index!N.next !is null && 
+                            eq(k, key(node2.index!N.next.value))){
+                        node2 = node2.index!N.next;
+                    }
+                    return ConstBucketSeqRange(this, node, node2);
                 }
             }
 
@@ -4166,13 +4372,23 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 }
             }
 
-            size_t maxLoad(size_t n){
+            @property loadFactor() const{
+                return load_factor;
+            }
+
+            @property loadFactor(size_t _load_factor) {
+                load_factor = load_factor;
+                // TODO: what else do we do here?
+                assert(0);
+            }
+
+            size_t maxLoad(size_t n) const{
                 double load = n * load_factor;
                 if(load > size_t.max) return size_t.max;
                 return cast(size_t) load;
             }
 
-            @property size_t capacity() {
+            @property size_t capacity() const{
                 return hashes.length;
             }
 
@@ -4313,20 +4529,20 @@ Complexity:
 $(BIGOH n $(SUB r) * d(n)), $(BR)
 $(BIGOH n $(SUB r)) for this index
 */
-            Range remove(R)( R r )
-            if( is(R == Range) || is(R == ListRange) ||
-                is(R == Take!Range) || is(R == Take!ListRange)){
+            HashedRange remove(R)( R r )
+            if( is(R == HashedRange) || is(R == BucketSeqRange) ||
+                is(R == Take!HashedRange) || is(R == Take!BucketSeqRange)){
                 while(!r.empty){
-                    static if( is(R == Range) || is(R == ListRange)){
+                    static if( is(R == HashedRange) || is(R == BucketSeqRange)){
                         ThisNode* node = r.node;
                     }else static if(
-                            is(R == Take!Range) || is(R == Take!ListRange)){
+                            is(R == Take!HashedRange) || is(R == Take!BucketSeqRange)){
                         ThisNode* node = r.source.node;
                     }else static assert(false);
                     r.popFront();
                     _RemoveAll(node);
                 }
-                return Range(this, null, hashes.length);
+                return HashedRange(this, null, hashes.length);
             }
 
 /** 
@@ -4435,9 +4651,9 @@ version(OldWay){
                 return r;
             }
 
-            private Range fromNode(ThisNode* n){
+            private HashedRange fromNode(ThisNode* n){
                 auto ix = hash(key(n.value))%this.index!N.hashes.length;
-                return Range(this, n, ix);
+                return HashedRange(this, n, ix);
             }
         }
     }

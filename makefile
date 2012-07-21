@@ -10,7 +10,7 @@ all: test_heap test_sequenced test_ra test_ordered test_hashed
 	
 clean: 
 	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed 
-	rm -f mru test tagging messups signals
+	rm -f mru test tagging messups signals const
 	rm -f *.o
 	rm -f multi_index.html
 
@@ -20,6 +20,9 @@ test: test.d $(MI)
 	dmd -gc -of$@ $^
 
 mru: unittests/mru.d $(MI)
+	dmd -gc -of$@ $^
+
+const: unittests/const.d $(MI)
 	dmd -gc -of$@ $^
 
 messups: unittests/messups.d $(MI)

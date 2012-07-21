@@ -41,11 +41,11 @@ unittest{
     auto t = take(r, 3);
     c.remove(t);
     assert(equal(c[], [4,5,6,8,10,12,14]));
-    r = c.upperBound(10);
-    c.remove(r);
+    auto rz = c.upperBound(10);
+    c.remove(rz);
     assert(equal(c[], [4,5,6,8,10]));
-    r = c.upperBound(10);
-    c.remove(r);
+    rz = c.upperBound(10);
+    c.remove(rz);
     assert(equal(c[], [4,5,6,8,10]));
     c.insert(iota(0,100,5));
     assert(array(c[]) == [0,4,5,6,8,10,15,20,25,30,35,40,45,50,55,60,65,70,
@@ -301,6 +301,25 @@ unittest{
     assert(equal(c.bounds!"[]"(-1,2), [1,2]));
     assert(equal(c.bounds!"[)"(-1,2), [1]));
     assert(equal(c.bounds!"[)"(4,5), [4,4,4,4]));
+}
+
+unittest{
+    class A{
+        int i;
+        int j;
+        this(int _i, int _j) {
+            i = _i;
+            j = _j;
+        }
+    }
+    alias MultiIndexContainer!(A, IndexedBy!(OrderedUnique!("a.i")), MutableView, Allocator) C1;
+    C1 c = new C1();
+    c.insert(new A(1,2));
+    c.front.j = 5;
+    c[].front.j = 6;
+    c.back.j = 7;
+    c[].back.j = 8;
+    c[1].j = 9;
 }
 }
 

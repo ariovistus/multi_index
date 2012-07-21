@@ -90,6 +90,26 @@ unittest{
     assert(equal(c[], [9,11]));
     assert(equal(d[], [9,11]));
 }
+
+unittest{
+    class A{
+        int i;
+        int j;
+        this(int _i, int _j) {
+            i = _i;
+            j = _j;
+        }
+    }
+    alias MultiIndexContainer!(A, IndexedBy!(RandomAccess!()),
+            MutableView, Allocator) C1;
+    C1 c = new C1();
+    c.insert(new A(1,2));
+    c.front.j = 5;
+    c[].front.j = 6;
+    c.back.j = 7;
+    c[].back.j = 8;
+    c[0].j = 9;
+}
 }
 
 mixin Testies!(GCAllocator) a1;

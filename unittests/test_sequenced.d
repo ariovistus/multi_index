@@ -290,6 +290,15 @@ unittest{
     c.back = cast() c.front;
     assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
             new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]));
+
+    alias MultiIndexContainer!(A, IndexedBy!(Sequenced!()), Allocator, MutableView) C2;
+
+    C2 c2 = new C2();
+    c2.insert(new A(1,2,3.4));
+    c2.front.j = 4;
+    c2[].front.j = 5;
+    c2.back.j = 6;
+    c2[].back.j = 7;
 }
 
 // test rearrangement 

@@ -232,7 +232,7 @@ c[]
 Returns a random access range iterating over the index.
 )))
 $(TR  $(TD $(D
-c[a,b]
+c[a .. b]
 ))$(TD $(TEXTWITHCOMMAS 
 Returns a random access range iterating over the subrange of the index.
 )))

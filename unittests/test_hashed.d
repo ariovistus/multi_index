@@ -212,6 +212,24 @@ unittest{
     assert(5 !in c);
 }
 
+unittest{
+    class A{
+        int i;
+        int j;
+        this(int _i, int _j) {
+            i = _i;
+            j = _j;
+        }
+    }
+    alias MultiIndexContainer!(A, IndexedBy!(HashedUnique!("a.i")), 
+            MutableView, Allocator) C1;
+    C1 c = new C1();
+    c.insert(new A(1,2));
+    c.front.j = 65;
+    c[].front.j = 85;
+    c[1].j = 95;
+}
+
 }
 
 mixin Testsies!(GCAllocator) a1;
