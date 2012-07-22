@@ -5030,7 +5030,7 @@ struct MutableView{}
 template IsIndexedBy(alias x) {
     // test x.stringof in case we have a bare Sequenced!() or somesuch
     enum bool IsIndexedBy = __traits(compiles, x.stringof) &&
-        x.stringof.startsWith("IndexedBy") &&
+        x.stringof.startsWith("IndexedBy!") &&
         __traits(compiles, x.List);
 }
 
@@ -5070,7 +5070,7 @@ template FindIndexedBy(Args...) {
 
 template IsValueChangedSlots(alias X) {
     enum bool IsValueChangedSlots = __traits(compiles, X.stringof) && 
-        X.stringof.startsWith("ValueChangedSlots");
+        X.stringof.startsWith("ValueChangedSlots!");
 }
 
 int ValueChangedSlotsCount(Args...)() {
@@ -5148,6 +5148,56 @@ size_t[] IndexGarbage(Args...)() {
         }
     }
     return res;
+}
+
+
+struct ComparisonEx(alias _key, alias _less) {
+    alias _less _less_;
+    alias binaryFun!_less less;
+    alias unaryFun!_key key;
+}
+
+struct DefaultComparison(alias _less) {
+    alias _less less;
+}
+
+template MultiCompare(F...) {
+    template NormComps(size_t i = 0, alias Dflt = "a<b") {
+        static if(i == F.length) {
+            alias TypeTuple!() NormComps;
+        }else {
+            static if(F[i].stringof.startsWith("DefaultComparison!") &&
+                    __traits(compiles, F[i].less)) {
+                alias NormComps!(i+1, F[i].less) NormComps;
+            }else{
+                static if (F[i].stringof.startsWith("ComparisonEx!") &&
+                        __traits(compiles, F[i].less) &&
+                        __traits(compiles, F[i].key)) {
+                    alias F[i] Cmp;
+                }else {
+                    alias ComparisonEx!(F[i], Dflt) Cmp;
+                }
+                alias TypeTuple!(Cmp, NormComps!(i+1, Dflt)) NormComps;
+            }
+        }
+    }
+
+    alias NormComps!() Comps;
+
+    bool MultiCompare(T)(T a, T b) {
+        foreach(i, cmp; Comps) {
+            auto a1 = cmp.key(a);
+            auto b1 = cmp.key(b);
+            auto less = cmp.less(a1,b1);
+            if(less) return true;
+            auto gtr = cmp.less(b1,a1);
+            if(gtr) return false;
+            static if(i == Comps.length-1) {
+                return false;
+            }
+        }
+        assert(0);
+    }
 }
 
 // error sinks 

@@ -31,6 +31,9 @@ messups: unittests/messups.d $(MI)
 tagging: unittests/tagging.d $(MI)
 	dmd -gc -of$@ $^ -unittest
 
+multi_compare: unittests/multi_compare.d $(MI)
+	dmd -gc -of$@ $^ -unittest
+
 multi_index.html: src/ddoc.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
 topo: unittests/topo.d src/multi_index.d src/replace.d

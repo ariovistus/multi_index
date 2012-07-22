@@ -2377,6 +2377,98 @@ auto seq_index = container.get_index!0
 +/
 struct IndexedBy(L...);
 
+
+/**
+For use with MultiCompare
+*/
+struct ComparisonEx(alias _key, alias _less);
+
+/**
+For use with MultiCompare
+*/
+struct DefaultComparison(alias _less);
+
+/**
+Convenience template to compose comparison of a sequence of items. 
+Consider when comparison of an object is dependent on more than one field:
+-----
+struct A {
+    int x;
+    int y;
+
+    int opCmp(A other) {
+        if(x == other.x) {
+            if(y == other.y) {
+                return 0;
+            }else {
+                return y < other.y ? -1 : 1;
+            }
+        }else{
+            return x < other.x ? -1 : 1;
+        }
+    }
+}
+-----
+Manual translation to a $(D less) function usable by appropriate indeces 
+is kind of nasty:
+-----
+alias binaryFun!"a.x == b.x ? a.y < b.y : a.x < b.x" less;
+-----
+and gets progressively worse with more fields. An equvalent $(D less)
+using MultiCompare:
+-----
+alias MultiCompare!("a.x", "a.y") less;
+-----
+The actual comparison operator used can be controlled on a per-field basis:
+-----
+alias MultiCompare!("a.x", ComparisonEx!("a.y", "a>b")) less1;
+-----
+Or on all subsequent fields:
+-----
+// equivalent to less1
+alias MultiCompare!("a.x", DefaultComparison!"a>b","a.y") less2;
+-----
+By default, MultiCompare uses the 'a<b' less than operator.
+*/
+template MultiCompare(F...) {
+    template NormComps(size_t i = 0, alias Dflt = "a<b") {
+        static if(i == F.length) {
+            alias TypeTuple!() NormComps;
+        }else {
+            static if(F[i].stringof.startsWith("DefaultComparison!") &&
+                    __traits(compiles, F[i].less)) {
+                alias NormComps!(i+1, F[i].less) NormComps;
+            }else{
+                static if (F[i].stringof.startsWith("ComparisonEx!") &&
+                        __traits(compiles, F[i].less) &&
+                        __traits(compiles, F[i].key)) {
+                    alias F[i] Cmp;
+                }else {
+                    alias ComparisonEx!(F[i], Dflt) Cmp;
+                }
+                alias TypeTuple!(Cmp, NormComps!(i+1, Dflt)) NormComps;
+            }
+        }
+    }
+
+    alias NormComps!() Comps;
+
+    /// _
+    bool MultiCompare(T)(T a, T b) {
+        foreach(i, cmp; Comps) {
+            auto a1 = cmp.key(a);
+            auto b1 = cmp.key(b);
+            auto less = cmp.less(a1,b1);
+            if(less) return true;
+            auto gtr = cmp.less(b1,a1);
+            if(gtr) return false;
+            static if(i == Comps.length-1) {
+                return false;
+            }
+        }
+        assert(0);
+    }
+}
 /** 
 Specifies how to hook up value signals to indeces with the semantics that 
 whenever value changes in a way that will cause 
