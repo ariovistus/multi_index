@@ -4504,6 +4504,27 @@ template MultiCompare(F...) {
     }
 }
 
+struct CriterionFromField(MultiIndex, size_t index, 
+        alias CompatibleKeyFromKey,
+        alias CompatibleLess = "a<b") {
+    alias binaryFun!CompatibleLess less;
+    alias MultiIndex.index!(index).key key;
+    alias MultiIndex.index!(index).KeyType KeyType;
+    alias unaryFun!CompatibleKeyFromKey ckey;
+    alias typeof(ckey(MultiIndex.ValueView.init)) CompatibleKeyType;
+
+    static:
+        bool kc_less(KeyType a, CompatibleKeyType b) {
+            return less(ckey(a),b);
+        }
+        bool ck_less(CompatibleKeyType a, KeyType b) {
+            return less(a, ckey(b));
+        }
+        bool cc_less(CompatibleKeyType a, CompatibleKeyType b) {
+            return less(a, b);
+        }
+}
+
 // error sinks 
 
 class MultiIndexContainer(Value, Args...)

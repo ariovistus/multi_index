@@ -1,7 +1,8 @@
 /**
 A port of Joaquín M López Muñoz' 
 <a 
-href="http://www.boost.org/doc/libs/1_48_0/libs/multi_index/doc/index.html"> 
+href="http://www.boost.org/doc/libs/1_50_0/libs/multi_index/doc/index.html"
+>
 _multi_index </a>
 library.
 
@@ -782,8 +783,28 @@ alias MultiIndexContainer!(int,IndexedBy!(Sequenced!()), MyAllocator) G;
 ------
 Two allocators are predefined in multi_index: $(B GCAllocator) (default), and $(B MallocAllocator)
 
+Compatible_Sorting_Criteria:
 
- */
+Loosely, predicates C1 and C2 are compatible if a sequence sorted by C1 is
+also sorted by C2 (consult 
+<a 
+href="http://www.boost.org/doc/libs/1_50_0/libs/multi_index/doc/reference/ord_indices.html#set_operations"
+>
+_multi_index
+</a> for a more complete definition).
+
+For (KeyType, CompatibleKeyType), a compatible sorting criterion 
+takes the form:
+-----
+struct CompatibleLess{
+    static:
+    bool kc_less(KeyType, CompatibleKeyType);
+    bool ck_less(CompatibleKeyType, KeyType);
+    bool cc_less(CompatibleKeyType, CompatibleKeyType);
+}
+-----
+
+*/
 
 module multi_index;
 
@@ -2519,6 +2540,16 @@ template MultiCompare(F...) {
         assert(0);
     }
 }
+
+/**
+  Build a compatible sorting criterion given a MultiIndexContainer index,
+  a conversion from KeyType to CompatibleKeyType, and an optional 
+  comparison operator over CompatibleKeyType.
+*/
+struct CriterionFromField(MultiIndex, size_t index, 
+        alias CompatibleKeyFromKey,
+        alias CompatibleLess = "a<b");
+
 /** 
 Specifies how to hook up value signals to indeces with the semantics that 
 whenever value changes in a way that will cause 

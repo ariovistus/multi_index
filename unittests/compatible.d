@@ -38,24 +38,7 @@ unittest {
     // suppose we want range of all items with i=1
     // then define a compatible sorting criterion.
 
-    // criterion needs to handle three calls:
-    // less(Key, CompatibleKey)
-    // less(CompatibleKey, Key)
-    // less(CompatibleKey, CompatibleKey)
-    static struct CompatibleLess{
-        static:
-        bool kc_less(A a, int b) {
-            enforce(a);
-            return a.i < b;
-        }
-        bool ck_less(int b, A a) {
-            enforce(a);
-            return b < a.i;
-        }
-        bool cc_less(int a, int b) {
-            return a < b;
-        }
-    }
+    alias CriterionFromField!(Set1, 0, "a.i") CompatibleLess;
 
     auto r = s.equalRange!CompatibleLess(1);
     int sum = 0;
