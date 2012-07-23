@@ -1737,6 +1737,20 @@ Complexity: ??
     if(isImplicitlyConvertible!(U, KeyType));
 
     /**
+     * Get a range from the container with all elements that are > k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k);
+    /**
+     * Get a range from the container with all elements that are > k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
+    /**
      * Get a range from the container with all elements that are < k according
      * to the less comparator
      *
@@ -1752,6 +1766,20 @@ Complexity: ??
      */
     auto lowerBound(U)(U k) const
     if(isImplicitlyConvertible!(U, KeyType));
+    /**
+     * Get a range from the container with all elements that are < k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k);
+    /**
+     * Get a range from the container with all elements that are < k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
 
     /**
      * Get a range from the container with all elements that are == k according
@@ -1770,13 +1798,35 @@ Complexity: ??
     auto equalRange(U)(U k) const
     if(isImplicitlyConvertible!(U, KeyType));
 
+    /**
+     * Get a range from the container with all elements that are == k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k);
+    /**
+     * Get a range from the container with all elements that are == k according
+     * to the compatible sorting criterion.
+     *
+     * Complexity: $(BIGOH log(n))
+     */
+    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
 /++
 Get a range of values bounded below by lower and above by upper, with
 inclusiveness defined by boundaries.
 Complexity: $(BIGOH log(n))
 +/
-    OrderedRange bounds(string boundaries = "[]", U)(U lower, U upper)
+    auto bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType));
+
+/++
+Get a range of values bounded below by lower and above by upper, with
+inclusiveness defined by boundaries.
+Complexity: $(BIGOH log(n))
++/
+    auto bounds(string boundaries = "[]", CompatibleLess, CompatibleKey)
+    (CompatibleKey lower, CompatibleKey upper);
 
         /*
          * Print the tree.  This prints a sideways view of the tree in ASCII form,

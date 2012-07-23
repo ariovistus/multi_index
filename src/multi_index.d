@@ -787,9 +787,6 @@ module multi_index;
 
 /**
  * TODO:
- *  ordered index
- *   compatible sorting criteria
- *   special constructor for SortedRange?
  *  random access index
  *   insertAfter ? insertBefore ?
  *  fix BitHackery
@@ -799,7 +796,7 @@ module multi_index;
  *  other indeces? 
  *  dup
  *  make reserve perform reserve on all appropriate indeces?
- *  
+ *  ensure MultiIndexContainer is strongly exception safe.  
  */
 
 version = BucketHackery;
@@ -3161,6 +3158,25 @@ Complexity: ??
         }
         return result;
     }
+    private inout(ThisNode)* 
+        _firstGreater(CompatibleLess, CompatibleKey)
+        (CompatibleKey k) inout {
+        // can't use _find, because we cannot return null
+        typeof(return) cur = _end.index!N.left;
+        typeof(return) result = _end;
+        while(cur)
+        {
+            // TODO: figure out unaryFun & inout
+            if(CompatibleLess.ck_less(k, key(cast() cur.value)))
+            {
+                result = cur;
+                cur = cur.index!N.left;
+            }
+            else
+                cur = cur.index!N.right;
+        }
+        return result;
+    }
 
     // find the first node where the value is >= k
     private inout(ThisNode)* _firstGreaterEqual(U)(U k) inout
@@ -3173,6 +3189,28 @@ Complexity: ??
         {
             // TODO: figure out unaryFun & inout
             if(_less(key(cast() cur.value), k))
+                cur = cur.index!N.right;
+            else
+            {
+                result = cur;
+                cur = cur.index!N.left;
+            }
+
+        }
+        return result;
+    }
+
+    // find the first node where the value is >= k
+    private inout(ThisNode)* 
+        _firstGreaterEqual(CompatibleLess, CompatibleKey)
+        (CompatibleKey k) inout {
+        // can't use _find, because we cannot return null.
+        typeof(return) cur = _end.index!N.left;
+        typeof(return) result = _end;
+        while(cur)
+        {
+            // TODO: figure out unaryFun & inout
+            if(CompatibleLess.kc_less(key(cast() cur.value), k))
                 cur = cur.index!N.right;
             else
             {
@@ -3200,6 +3238,14 @@ Complexity: ??
     {
         return ConstOrderedRange(this,_firstGreater(k), _end);
     }
+    auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k) 
+    {
+        return OrderedRange(this,_firstGreater!CompatibleLess(k), _end);
+    }
+    auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const 
+    {
+        return ConstOrderedRange(this,_firstGreater!CompatibleLess(k), _end);
+    }
 
     /**
      * Get a range from the container with all elements that are < k according
@@ -3216,6 +3262,17 @@ Complexity: ??
     if(isImplicitlyConvertible!(U, KeyType))
     {
         return ConstOrderedRange(this,_end.index!N.leftmost, _firstGreaterEqual(k));
+    }
+
+    auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k) 
+    {
+        return OrderedRange(this,_end.index!N.leftmost, 
+                _firstGreaterEqual!CompatibleLess(k));
+    }
+    auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const 
+    {
+        return ConstOrderedRange(this,_end.index!N.leftmost, 
+                _firstGreaterEqual!CompatibleLess(k));
     }
 
     /**
@@ -3261,6 +3318,22 @@ Complexity: ??
             return ConstOrderedRange(this,beg, beg.index!N.next);
         }
     }
+    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k)
+    {
+        auto beg = _firstGreaterEqual!CompatibleLess(k);
+        if(beg is _end || CompatibleLess.ck_less(k, key(beg.value)))
+            // no values are equal
+            return OrderedRange(this,beg, beg);
+        return OrderedRange(this,beg, _firstGreater!CompatibleLess(k));
+    }
+    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const
+    {
+        auto beg = _firstGreaterEqual!CompatibleLess(k);
+        if(beg is _end || CompatibleLess.ck_less(k, key(beg.value)))
+            // no values are equal
+            return ConstOrderedRange(this,beg, beg);
+        return ConstOrderedRange(this,beg, _firstGreater!CompatibleLess(k));
+    }
 
 /++
 Get a range of values bounded below by lower and above by upper, with
@@ -3302,6 +3375,22 @@ Complexity: $(BIGOH log(n))
         }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
     }
 +/
+    auto bounds(string boundaries = "[]", CompatibleLess, CompatibleKey)
+    (CompatibleKey lower, CompatibleKey upper)
+    in{
+        static if(boundaries == "[]") assert(!CompatibleLess.cc_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+        else assert(CompatibleLess.cc_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+    }body{
+        static if(boundaries == "[]"){
+            return OrderedRange(this,_firstGreaterEqual!CompatibleLess(lower), _firstGreater!CompatibleLess(upper));
+        }else static if(boundaries == "[)"){
+            return OrderedRange(this, _firstGreaterEqual!CompatibleLess(lower), _firstGreaterEqual!CompatibleLess(upper));
+        }else static if(boundaries == "(]"){
+            return OrderedRange(this, _firstGreater!CompatibleLess(lower), _firstGreater!CompatibleLess(upper));
+        }else static if(boundaries == "()"){
+            return OrderedRange(this, _firstGreater!CompatibleLess(lower), _firstGreaterEqual!CompatibleLess(upper));
+        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
+    }
 
         /*
          * Print the tree.  This prints a sideways view of the tree in ASCII form,

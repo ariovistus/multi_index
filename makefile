@@ -33,6 +33,8 @@ tagging: unittests/tagging.d $(MI)
 
 multi_compare: unittests/multi_compare.d $(MI)
 	dmd -gc -of$@ $^ -unittest
+compatible: unittests/compatible.d $(MI)
+	dmd -gc -of$@ $^ -unittest
 
 multi_index.html: src/ddoc.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
