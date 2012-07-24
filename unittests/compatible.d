@@ -38,7 +38,7 @@ unittest {
     // suppose we want range of all items with i=1
     // then define a compatible sorting criterion.
 
-    alias CriterionFromField!(Set1, 0, "a.i") CompatibleLess;
+    alias CriterionFromKey!(Set1, 0, "a.i") CompatibleLess;
 
     auto r = s.equalRange!CompatibleLess(1);
     int sum = 0;

@@ -905,7 +905,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             SeqRange opSlice();
-            /// _
+            /// ditto
             ConstSeqRange opSlice()const;
 
 /**
@@ -1156,7 +1156,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             RARange opSlice ();
-            /// _
+            /// ditto
             ConstRARange opSlice () const;
 
 /**
@@ -1167,7 +1167,7 @@ Preconditions: a <= b && b <= length
 Complexity: $(BIGOH 1)
 */
             RARange opSlice(size_t a, size_t b);
-            /// _
+            /// ditto
             ConstRARange opSlice(size_t a, size_t b) const;
 
 /**
@@ -1537,7 +1537,7 @@ Complexity: $(BIGOH 1).
      * Complexity: $(BIGOH log(n))
      */
     OrderedRange opSlice();
-    /// _
+    /// ditto
     ConstOrderedRange opSlice() const;
 
     /**
@@ -1681,16 +1681,7 @@ Complexity: ??
                 log(n)) for this index
     +/
     OrderedRange remove(OrderedRange r);
-
-    /++
-        Removes the given $(D Take!Range) from the container
-
-        Returns: A range containing all of the elements that were after the
-        given range.
-
-        Complexity: $(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
-                log(n)) for this index 
-    +/
+    /// ditto
     OrderedRange remove(Take!OrderedRange r);
 
     /++
@@ -1719,6 +1710,7 @@ Complexity: ??
     size_t removeKey(Keys...)(Keys keys)
     if(allSatisfy!(implicitlyConverts,Keys));
 
+    /// ditto
     size_t removeKey(Key)(Key[] keys)
     if(isImplicitlyConvertible!(Key, KeyType));
     
@@ -1748,12 +1740,7 @@ Complexity: ??
      */
     auto upperBound(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType));
-    /**
-     * Get a range from the container with all elements that are > k according
-     * to the less comparator
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto upperBound(U)(U k) const 
     if(isImplicitlyConvertible!(U, KeyType));
 
@@ -1764,12 +1751,7 @@ Complexity: ??
      * Complexity: $(BIGOH log(n))
      */
     auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k);
-    /**
-     * Get a range from the container with all elements that are > k according
-     * to the compatible sorting criterion.
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto upperBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
     /**
      * Get a range from the container with all elements that are < k according
@@ -1779,12 +1761,7 @@ Complexity: ??
      */
     auto lowerBound(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType));
-    /**
-     * Get a range from the container with all elements that are < k according
-     * to the less comparator
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto lowerBound(U)(U k) const
     if(isImplicitlyConvertible!(U, KeyType));
     /**
@@ -1794,12 +1771,7 @@ Complexity: ??
      * Complexity: $(BIGOH log(n))
      */
     auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k);
-    /**
-     * Get a range from the container with all elements that are < k according
-     * to the compatible sorting criterion.
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto lowerBound(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
 
     /**
@@ -1810,12 +1782,7 @@ Complexity: ??
      */
     auto equalRange(U)(U k)
     if(isImplicitlyConvertible!(U, KeyType));
-    /**
-     * Get a range from the container with all elements that are == k according
-     * to the less comparator
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto equalRange(U)(U k) const
     if(isImplicitlyConvertible!(U, KeyType));
 
@@ -1826,12 +1793,7 @@ Complexity: ??
      * Complexity: $(BIGOH log(n))
      */
     auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k);
-    /**
-     * Get a range from the container with all elements that are == k according
-     * to the compatible sorting criterion.
-     *
-     * Complexity: $(BIGOH log(n))
-     */
+    /// ditto
     auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
 /++
 Get a range of values bounded below by lower and above by upper, with
@@ -1962,7 +1924,7 @@ Fetch a range that spans all the elements in the container.
 Complexity: $(BIGOH 1)
 */
             HeapRange opSlice();
-            /// _
+            /// ditto
             ConstHeapRange opSlice() const;
 
 /**
@@ -2236,7 +2198,7 @@ Gets a range of all elements in container.
 Complexity: $(BIGOH 1)
 */
             HashedRange opSlice();
-            /// _
+            /// ditto
             ConstHashedRange opSlice() const;
 
             // returns true iff k was found.
@@ -2267,11 +2229,7 @@ $(BIGOH n) ($(BIGOH 1) on a good day)
                 if (op == "in");
             }
 
-/**
-Reports whether value exists in this collection.
-Complexity:
-$(BIGOH n) ($(BIGOH n 1) on a good day)
- */
+            /// ditto
             bool opBinaryRight(string op)(ValueView value) const
             if (op == "in");
 
@@ -2282,7 +2240,7 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
             bool contains(ValueView value) const;
 
-            /// _
+            /// ditto
             bool contains(KeyType k) const;
 
 /**
@@ -2323,11 +2281,7 @@ Complexity:
 $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
  */
             BucketSeqRange equalRange( KeyType k );
-/**
-Returns a range of all elements with eq(key(elem), k). 
-Complexity:
-$(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
- */
+            /// ditto 
             ConstBucketSeqRange equalRange( KeyType k ) const;
 
             static if(allowDuplicates){
@@ -2546,7 +2500,7 @@ template MultiCompare(F...) {
   a conversion from KeyType to CompatibleKeyType, and an optional 
   comparison operator over CompatibleKeyType.
 */
-struct CriterionFromField(MultiIndex, size_t index, 
+struct CriterionFromKey(MultiIndex, size_t index, 
         alias CompatibleKeyFromKey,
         alias CompatibleLess = "a<b");
 

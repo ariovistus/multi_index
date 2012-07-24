@@ -4504,7 +4504,7 @@ template MultiCompare(F...) {
     }
 }
 
-struct CriterionFromField(MultiIndex, size_t index, 
+struct CriterionFromKey(MultiIndex, size_t index, 
         alias CompatibleKeyFromKey,
         alias CompatibleLess = "a<b") {
     alias binaryFun!CompatibleLess less;
