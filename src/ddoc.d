@@ -1808,8 +1808,9 @@ Get a range of values bounded below by lower and above by upper, with
 inclusiveness defined by boundaries.
 Complexity: $(BIGOH log(n))
 +/
-    auto bounds(string boundaries = "[]", CompatibleLess, CompatibleKey)
-    (CompatibleKey lower, CompatibleKey upper);
+    auto bounds(CompatibleLess, string boundaries = "[]", CompatibleKey)
+    (CompatibleKey lower, CompatibleKey upper)
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey));
 
         /*
          * Print the tree.  This prints a sideways view of the tree in ASCII form,

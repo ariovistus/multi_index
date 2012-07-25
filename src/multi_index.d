@@ -2236,44 +2236,25 @@ Complexity: ??
         Complexity:$(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
                 log(n)) for this index
     +/
-    OrderedRange remove(OrderedRange r)
+    OrderedRange remove(R)(R r)
+    if(is(R == OrderedRange) || is(R == Take!OrderedRange))
     out(r){
         version(RBDoChecks) _Check();
     }body{
-        auto b = r._begin;
-        auto e = r._end;
+        static if(IsMyRange!R) {
+            auto b = r._begin;
+            auto e = r._end;
+        }else {
+            auto b = r.source._begin;
+            while(!r.empty)
+                r.popFront(); // move take range to its last element
+
+            auto e = r.source._begin;
+        }
         while(b !is e)
         {
             b = _RemoveAll!N(b);
         }
-        return OrderedRange(this, e, _end);
-    }
-
-    /++
-        Removes the given $(D Take!OrderedRange) from the container
-
-        Returns: A range containing all of the elements that were after the
-        given range.
-
-        Complexity: $(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
-                log(n)) for this index 
-    +/
-    OrderedRange remove(Take!OrderedRange r)
-    out(r){
-        version(RBDoChecks) _Check();
-    }body{
-        auto b = r.source._begin;
-
-        while(!r.empty)
-            r.popFront(); // move take range to its last element
-
-        auto e = r.source._begin;
-
-        while(b != e)
-        {
-            b = _RemoveAll!N(b);
-        }
-
         return OrderedRange(this, e, _end);
     }
 
@@ -2558,53 +2539,49 @@ Complexity: $(BIGOH log(n))
     auto bounds(string boundaries = "[]", U)(U lower, U upper)
     if(isImplicitlyConvertible!(U, KeyType))
     in{
-        static if(boundaries == "[]") assert(!_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
-        else assert(_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+        static if(boundaries == "[]") assert(!_less(upper,lower),
+                format("nonsensical bounds %s%s,%s%s",
+                    boundaries[0], lower, upper, boundaries[1]));
+        else assert(_less(lower,upper), 
+                format("nonsensical bounds %s%s,%s%s",
+                    boundaries[0], lower, upper, boundaries[1]));
     }body{
-        static if(boundaries == "[]"){
-            return OrderedRange(this,_firstGreaterEqual(lower), _firstGreater(upper));
-        }else static if(boundaries == "[)"){
-            return OrderedRange(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
-        }else static if(boundaries == "(]"){
-            return OrderedRange(this, _firstGreater(lower), _firstGreater(upper));
-        }else static if(boundaries == "()"){
-            return OrderedRange(this, _firstGreater(lower), _firstGreaterEqual(upper));
-        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
+        static if(boundaries[0] == '[') {
+            auto n_lower = _firstGreaterEqual(lower);
+        }else static if(boundaries[0] == '('){
+            auto n_lower = _firstGreater(lower);
+        }else static assert(false);
+        static if(boundaries[1] == ']') {
+            auto n_upper = _firstGreater(upper);
+        }else static if(boundaries[1] == ')'){
+            auto n_upper = _firstGreaterEqual(upper);
+        }else static assert(false);
+        return OrderedRange(this, n_lower, n_upper);
     }
 
-/+
-    auto bounds(string boundaries = "[]", U)(U lower, U upper) const
-    if(isImplicitlyConvertible!(U, KeyType))
+    auto cbounds(CompatibleLess,string boundaries = "[]", CompatibleKey)
+        (CompatibleKey lower, CompatibleKey upper)
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey))
     in{
-        static if(boundaries == "[]") assert(!_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
-        else assert(_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
+        static if(boundaries == "[]") 
+            assert(!CompatibleLess.cc_less(upper,lower),
+                    format("nonsensical bounds %s%s,%s%s",
+                        boundaries[0], lower, upper, boundaries[1]));
+        else assert(CompatibleLess.cc_less(lower,upper), 
+                format("nonsensical bounds %s%s,%s%s",
+                    boundaries[0], lower, upper, boundaries[1]));
     }body{
-        static if(boundaries == "[]"){
-            return ConstOrderedRange(this,_firstGreaterEqual(lower), _firstGreater(upper));
-        }else static if(boundaries == "[)"){
-            return ConstOrderedRange(this, _firstGreaterEqual(lower), _firstGreaterEqual(upper));
-        }else static if(boundaries == "(]"){
-            return ConstOrderedRange(this, _firstGreater(lower), _firstGreater(upper));
-        }else static if(boundaries == "()"){
-            return ConstOrderedRange(this, _firstGreater(lower), _firstGreaterEqual(upper));
-        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
-    }
-+/
-    auto bounds(string boundaries = "[]", CompatibleLess, CompatibleKey)
-    (CompatibleKey lower, CompatibleKey upper)
-    in{
-        static if(boundaries == "[]") assert(!CompatibleLess.cc_less(upper,lower),format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
-        else assert(CompatibleLess.cc_less(lower,upper), format("nonsensical bounds %s%s,%s%s",boundaries[0], lower, upper, boundaries[1]));
-    }body{
-        static if(boundaries == "[]"){
-            return OrderedRange(this,_firstGreaterEqual!CompatibleLess(lower), _firstGreater!CompatibleLess(upper));
-        }else static if(boundaries == "[)"){
-            return OrderedRange(this, _firstGreaterEqual!CompatibleLess(lower), _firstGreaterEqual!CompatibleLess(upper));
-        }else static if(boundaries == "(]"){
-            return OrderedRange(this, _firstGreater!CompatibleLess(lower), _firstGreater!CompatibleLess(upper));
-        }else static if(boundaries == "()"){
-            return OrderedRange(this, _firstGreater!CompatibleLess(lower), _firstGreaterEqual!CompatibleLess(upper));
-        }else static assert(false, "waht is this " ~ boundaries ~ " bounds?!");
+        static if(boundaries[0] == '[') {
+            auto n_lower = _firstGreaterEqual!CompatibleLess(lower);
+        }else static if(boundaries[0] == '('){
+            auto n_lower = _firstGreater!CompatibleLess(lower);
+        }else static assert(false);
+        static if(boundaries[1] == ']') {
+            auto n_upper = _firstGreater!CompatibleLess(upper);
+        }else static if(boundaries[1] == ')'){
+            auto n_upper = _firstGreaterEqual!CompatibleLess(upper);
+        }else static assert(false);
+        return OrderedRange(this, n_lower, n_upper);
     }
 
         /*
@@ -4504,6 +4481,17 @@ template MultiCompare(F...) {
     }
 }
 
+template IsCompatibleLess(Less, Key, CKey) {
+    enum bool IsCompatibleLess = is(typeof({
+                Less less;
+                auto c = CKey.init;
+                auto k = Key.init;
+                less.cc_less(c,c);
+                less.kc_less(k,c);
+                less.ck_less(c,k);
+                }));
+}
+
 struct CriterionFromKey(MultiIndex, size_t index, 
         alias CompatibleKeyFromKey,
         alias CompatibleLess = "a<b") {
@@ -4749,6 +4737,10 @@ if(IndexedByCount!(Args)() == 1 &&
                         // grr opdispatch not handle this one
                         auto bounds(string bs = "[]", T)(T t1, T t2){
                             return this.outer.index!($N).bounds!(bs,T)(t1,t2);
+                        }
+                        // grr opdispatch not handle this one
+                        auto bounds(V, string bs = "[]", T)(T t1, T t2){
+                            return this.outer.index!($N).cbounds!(V,bs,T)(t1,t2);
                         }
 
                         auto opDispatch(string s, T...)(T args){

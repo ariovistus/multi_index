@@ -1,4 +1,4 @@
-DMD = dmd 
+DMD = dmd
 HERE = $(shell pwd)
 MODEL=64
 DDOCFLAGS=-m$(MODEL) -d -c -o- -version=StdDdoc 
@@ -17,24 +17,26 @@ clean:
 html: multi_index.html
 
 test: test.d $(MI)
-	dmd -gc -of$@ $^
+	$(DMD) -gc -of$@ $^
 
 mru: unittests/mru.d $(MI)
-	dmd -gc -of$@ $^
+	$(DMD) -gc -of$@ $^
 
 const: unittests/const.d $(MI)
-	dmd -gc -of$@ $^
+	$(DMD) -gc -of$@ $^
 
 messups: unittests/messups.d $(MI)
-	dmd -gc -of$@ $^
+	$(DMD) -gc -of$@ $^
 
 tagging: unittests/tagging.d $(MI)
-	dmd -gc -of$@ $^ -unittest
+	$(DMD) -gc -of$@ $^ -unittest
 
 multi_compare: unittests/multi_compare.d $(MI)
-	dmd -gc -of$@ $^ -unittest
+	$(DMD) -gc -of$@ $^ -unittest
 compatible: unittests/compatible.d $(MI)
-	dmd -gc -of$@ $^ -unittest
+	$(DMD) -gc -of$@ $^ -unittest
+clear: unittests/clear.d $(MI)
+	$(DMD) -gc -of$@ $^ 
 
 multi_index.html: src/ddoc.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
