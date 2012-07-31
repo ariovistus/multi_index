@@ -2514,7 +2514,10 @@ Complexity: ??
             return ConstOrderedRange(this,beg, beg.index!N.next);
         }
     }
-    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k)
+
+    // @@@BUG@@@ dmd issue 8440 prevents us frem naming this function equalRange
+    OrderedRange cEqualRange(CompatibleLess, CompatibleKey)(CompatibleKey k)
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey))
     {
         auto beg = _firstGreaterEqual!CompatibleLess(k);
         if(beg is _end || CompatibleLess.ck_less(k, key(beg.value)))
@@ -2522,7 +2525,8 @@ Complexity: ??
             return OrderedRange(this,beg, beg);
         return OrderedRange(this,beg, _firstGreater!CompatibleLess(k));
     }
-    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const
+    ConstOrderedRange cEqualRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey))
     {
         auto beg = _firstGreaterEqual!CompatibleLess(k);
         if(beg is _end || CompatibleLess.ck_less(k, key(beg.value)))
@@ -4741,6 +4745,16 @@ if(IndexedByCount!(Args)() == 1 &&
                         // grr opdispatch not handle this one
                         auto bounds(V, string bs = "[]", T)(T t1, T t2){
                             return this.outer.index!($N).cbounds!(V,bs,T)(t1,t2);
+                        }
+                        // grr opdispatch not handle this one
+                        auto cEqualRange(L, K)(K k)
+                        {
+                            return this.outer.index!($N).cEqualRange!(L, K).equalRange(k);
+                        }
+                        // grr opdispatch not handle this one
+                        auto cEqualRange(L, K)(K k) const
+                        {
+                            return this.outer.index!($N).cEqualRange!(L, K).equalRange(k);
                         }
 
                         auto opDispatch(string s, T...)(T args){

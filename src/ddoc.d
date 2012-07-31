@@ -1792,9 +1792,11 @@ Complexity: ??
      *
      * Complexity: $(BIGOH log(n))
      */
-    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k);
+    OrderedRange cEqualRange(CompatibleLess, CompatibleKey)(CompatibleKey k)
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey));
     /// ditto
-    auto equalRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const;
+    ConstOrderedRange cEqualRange(CompatibleLess, CompatibleKey)(CompatibleKey k) const
+    if(IsCompatibleLess!(CompatibleLess, KeyType, CompatibleKey));
 /++
 Get a range of values bounded below by lower and above by upper, with
 inclusiveness defined by boundaries.

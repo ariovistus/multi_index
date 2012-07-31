@@ -40,7 +40,7 @@ unittest {
 
     alias CriterionFromKey!(Set1, 0, "a.i") CompatibleLess;
 
-    auto r = s.equalRange!CompatibleLess(1);
+    auto r = s.cEqualRange!CompatibleLess(1);
     int sum = 0;
     foreach(a; r) {
         assert(a.i == 1);
@@ -64,7 +64,7 @@ unittest {
     }
     assert(sum==5);
 
-    auto r4 = s.bounds!("[)",CompatibleLess)(0,2);
+    auto r4 = s.cbounds!(CompatibleLess,"[)")(0,2);
     sum = 0;
     foreach(a; r4) {
         assert(a.i == 1);
