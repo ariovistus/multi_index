@@ -11,6 +11,7 @@ all: test_heap test_sequenced test_ra test_ordered test_hashed
 clean: 
 	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed 
 	rm -f mru test tagging messups signals const
+	rm -f compatible examples multi_compare
 	rm -f *.o
 	rm -f multi_index.html
 
@@ -35,8 +36,6 @@ multi_compare: unittests/multi_compare.d $(MI)
 	$(DMD) -gc -of$@ $^ -unittest
 compatible: unittests/compatible.d $(MI)
 	$(DMD) -gc -of$@ $^ -unittest
-clear: unittests/clear.d $(MI)
-	$(DMD) -gc -of$@ $^ 
 
 multi_index.html: src/ddoc.d $(DOCS)
 	$(DMD) $(DDOCFLAGS) -Df$@ $^
