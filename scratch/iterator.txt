@@ -1,0 +1,107 @@
+java, d, multi_index, ranges, iterators, collections, and stuff.
+
+Java defines a notion of iterators, most notably allowing the pattern
+
+while(it.hasNext()) {
+    Object item = it.next();
+    if(predicate) it.remove();
+}
+
+in any of the big 4, though with the caveat that concurrent modification will cause problems.
+
+Notice the iterator knows when it can no longer supply elements.
+
+C++ defines iterators. They are more versatile than java's, and their potential 
+is more realized in the standard library.
+
+stl containers support the pattern 
+
+for(iterator it = container.front(); it != container.end(); it++) {
+    container::value_type item = *it;
+    if(predicate) container.erase(it);
+}
+
+A C++ iterator is essentially a pointer. it points to an element of the 
+container, and incrementing it makes it point to the next element of the 
+container. Consequently, the iterator doesn't know when iteration must stop, 
+the remove operation must be implemented in the container,
+and the stop condition must be implemented by the programmer, 
+
+C++ also supports the notion of ranges, which encapsulates the knowledge of 
+when to stop. The simplest range would be the pair (container.front(), container.end()). If the predicate in the above example always evaluates true, the above example can be rewritten to
+
+container.erase(container.front(), container.end());
+
+Notice 
+A) the stop condition is safely inside the erase function (unless the 
+programmer, say, mixed up the order of the two arguments), and 
+B) our ability to use a predicate is gone.
+
+This has no consequence to the C++ programmer; however D has no notion of C++
+iterators whatsoever and only supports the notion of ranges. Thus, we can
+duplicate the latter example
+
+container.remove(container[]);
+
+rather nicely. We have both the safety (better, actually) and the lack of 
+choice. We can also implement the former:
+
+auto rng = container[];
+while(!rng.empty) {
+    auto item = rng.front;
+    if(predicate) {
+        rng = container.linearRemove(take(rng,1));
+    }else rng.popFront();
+}
+
+But it is hardly an improvement over C++. It retains the choice/safety 
+characteristics of the C++ example, and throws in extra verbosity to boot. 
+
+But can't we do better than that? Why not something like
+
+container.linearRemove(filter!predicate(container[]));
+
+Now we have
+A) safety - the composed range knows when to stop
+B) choice - with some help from the standard library, range composition 
+can give us nearly as much versatility (albeit perhaps a bit clunkier).
+
+The problem is when you wrap a container's range one or two or more times 
+the container loses its handle on whatever internal specifics it needs to 
+quickly determine where the element to remove is. But in the example above, 
+container can use a range wrapped by a take range, can't it? Yes, but 
+Take!Range is hardcoded in to the container types in std.container. In the 
+general case, you have an infinite number of compositions of ranges to deal 
+with. Hardcoding won't work. If all composed ranges followed the convention of
+a standard name for the inner range, then it would be relatively trivial to
+get that handle back. But we don't have that.
+
+And anyways, things aren't so simple. Not all ranges fit this cookie cutter.
+Consider chain(r1,r2, ..). It has multiple inner ranges. Consider map!"f(a)"(r).
+Exposing an inner range doesn't make much sense for this case. No, what we
+really need is for the value type of the range to expose whatever internals
+the container type needs. 
+
+What if we had
+
+class Position {
+    Value v;
+    private:
+        <whatever>
+}
+
+as our ranges' element types? This allows us access to our container elements 
+and the container access to whatever it needs, but does not allow us access to
+the container internals. Predicates might be a bit more verbose, but they are
+still workable.
+
+If the container has what it needs from its existing range, we don't even need
+to reimplement opSlice, equalRange, etc to return either Range or 
+PositionRange, just implement a single range composition of 
+Range -> PositionRange. Let's call it POS.
+
+Then we'd have:
+
+container.linearRemove(filter!predicate2(POS(container[])));
+
+Safety. Versatility. Range philosophy untainted. Not too shabby.
