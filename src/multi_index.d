@@ -142,7 +142,8 @@ bidirectional range
             }
             Container c;
             Node* _front, _back;
-            alias _front node;
+            alias _front front_node;
+            alias _back back_node;
 
             this(Container _c, Node* f, Node* b) {
                 c = _c;
@@ -174,32 +175,6 @@ bidirectional range
 
             void popBack(){
                 _back = _back.index!N.prev;
-            }
-
-            static if(!is_const) {
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
-*/
-            void removeFront(){
-                Node* node = _front;
-                popFront();
-                c._RemoveAll(node);
-            }
-
-/**
-Pops back and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
-*/
-            void removeBack(){
-                Node* node = _back;
-                popBack();
-                c._RemoveAll(node);
-            }
             }
         }
 
@@ -370,14 +345,29 @@ Preconditions: moveme and tohere are both ranges of the same container.
 Postconditions: moveme.front is incremented
 Complexity: $(BIGOH 1)
 */
-            void relocateFront(ref SeqRange moveme, SeqRange tohere)
+            void relocateFront(PosRange)(ref PosRange moveme, PosRange tohere)
+            if(is(ElementType!PosRange == Position!(ThisNode)) ||
+               is(PosRange == SeqRange))
             in{
-                assert(moveme.c == tohere.c);
-                assert(moveme.node);
-                assert(tohere.node);
+                // rubbish, now we can't ensure two ranges are from same 
+                // index, container
+                static if(is(PosRange == SeqRange)) {
+                    // well, do it if you can
+                    assert(moveme.c == tohere.c);
+                    assert(moveme.front_node);
+                    assert(tohere.front_node);
+                }else {
+                    assert(moveme.front.node);
+                    assert(tohere.front.node);
+                }
             }body{
-                ThisNode* m = moveme._front;
-                ThisNode* n = tohere._front;
+                static if(is(PosRange == SeqRange)) {
+                    ThisNode* m = moveme.front_node;
+                    ThisNode* n = tohere.front_node;
+                }else {
+                    ThisNode* m = moveme.front.node;
+                    ThisNode* n = tohere.front.node;
+                }
                 moveme.popFront();
                 if (m is n) return; //??
                 if (m is n.index!N.prev) return; //??
@@ -392,14 +382,26 @@ Preconditions: moveme and tohere are both ranges of the same container
 Postconditions: moveme.back is decremented
 Complexity: $(BIGOH 1)
 */
-            void relocateBack(ref SeqRange moveme, SeqRange tohere)
+            void relocateBack(PosRange)(ref PosRange moveme, PosRange tohere)
+            if(is(ElementType!PosRange == Position!(ThisNode)) ||
+               is(PosRange == SeqRange))
             in{
-                assert(moveme.c == tohere.c);
-                assert(moveme.node);
-                assert(tohere.node);
+                static if(is(PosRange == SeqRange)) {
+                    assert(moveme.c == tohere.c);
+                    assert(moveme.back_node);
+                    assert(tohere.back_node);
+                }else {
+                    assert(moveme.back.node);
+                    assert(tohere.back.node);
+                }
             }body{
-                ThisNode* m = moveme._back;
-                ThisNode* n = tohere._back;
+                static if(is(PosRange == SeqRange)) {
+                    ThisNode* m = moveme.back_node;
+                    ThisNode* n = tohere.back_node;
+                }else{
+                    ThisNode* m = moveme.back.node;
+                    ThisNode* n = tohere.back.node;
+                }
                 moveme.popBack();
                 if (m is n) return; //??
                 if (m is n.index!N.next) return; //??
@@ -408,24 +410,18 @@ Complexity: $(BIGOH 1)
                 if(n is _back) _back = m;
             }
 
-/**
-Perform mod on r.front and performs any necessary fixups to container's 
-indeces. If the result of mod violates any index' invariant, r.front is
-removed from the container.
-Preconditions: !r.empty, $(BR)
-mod is a callable of the form void mod(ref Value) 
-Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index 
-*/
-
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
             if(is(SomeRange == SeqRange) || 
-                    is(SomeRange == typeof(retro(SeqRange.init)))) {
-                static if(is(SomeRange == SeqRange)){
-                    ThisNode* node = r.node;
-                }else{
-                    ThisNode* node = r.source._back;
+               is(ElementType!SomeRange == Position!(ThisNode))) {
+                while(!r.empty) {
+                    static if(is(SomeRange == SeqRange)){
+                        ThisNode* node = r.front_node;
+                    }else{
+                        ThisNode* node = r.front.node;
+                    }
+                    _Modify(node, mod);
+                    r.popFront();
                 }
-                _Modify(node, mod);
             }
 
 /**
@@ -433,15 +429,9 @@ Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, Value value)
-            if(is(SomeRange == SeqRange) || 
-                    is(SomeRange == typeof(retro(SeqRange.init)))){
-                static if(is(SomeRange == SeqRange)){
-                    ThisNode* node = r.node;
-                }else{
-                    ThisNode* node = r.source._back;
-                }
-                return _Replace(node, value);
+            bool replace(Position!ThisNode r, Value value)
+            {
+                return _Replace(r.node, value);
             }
 
             bool _insertFront(ThisNode* node) nothrow
@@ -619,13 +609,14 @@ Preconditions: r came from this index
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 +/
             SeqRange remove(R)(R r)
-            if(is(R == SeqRange) || is(R == Take!SeqRange))
+            if(is(R == SeqRange) || 
+               is(ElementType!R == Position!ThisNode))
             {
                 while(!r.empty){
                     static if(is(R == SeqRange)){
-                        ThisNode* f = r._front;
+                        ThisNode* f = r.front_node;
                     }else{
-                        ThisNode* f = r.source._front;
+                        ThisNode* f = r.front.node;
                     }
                     r.popFront();
                     _RemoveAll(f);
@@ -698,13 +689,18 @@ template RandomAccess() {
                     e = _e;
                 }
 
-                @property Node* node(){
+                private @property Node* front_node(){
+                    assert(s < e && e <= c.index!N.length);
                     return c.index!N.ra[s];
+                }
+                private @property Node* back_node() {
+                    assert(s < e && e <= c.index!N.length);
+                    return c.index!N.ra[e-1];
                 }
 
                 @property front(){ 
                     assert(s < e && e <= c.index!N.length);
-                    return c.index!N.ra[s].value; 
+                    return front_node.value;
                 }
 
                 void popFront(){ s++; }
@@ -728,8 +724,7 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
                 @property back(){ 
-                    assert(s < e && e <= c.index!N.length);
-                    return c.index!N.ra[e-1].value;
+                    return back_node.value;
                 }
 
                 void popBack(){ e--; }
@@ -751,7 +746,9 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 @property save(){ return this; }
 
-                auto opIndex(size_t i){ return c.index!N.ra[i].value; }
+                auto opIndex(size_t i){ return nth_node(i).value; }
+
+                auto nth_node(size_t i) { return c.index!N.ra[i]; }
             }
 
             alias RARangeT!true ConstRARange;
@@ -990,7 +987,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
             if(is(SomeRange == RARange) || 
                     is(SomeRange == typeof(retro(RARange.init)))) {
                 static if(is(SomeRange == RARange)){
-                    ThisNode* node = r.node;
+                    ThisNode* node = r.front_node;
                 }else{
                     ThisNode* node = ra[r.source.e-1];
                 }
@@ -1005,7 +1002,7 @@ Complexity: ??
             if(is(SomeRange == Range) || 
                     is(SomeRange == typeof(retro(Range.init)))){
                 static if(is(SomeRange == Range)){
-                    ThisNode* node = r.node;
+                    ThisNode* node = r.front_node;
                 }else{
                     ThisNode* node = ra[r.source.e-1];
                 }
@@ -1024,7 +1021,7 @@ for this index
                 size_t e = r.e;
                 size_t newlen = _length - (e-s);
                 while(!r.empty){
-                    ThisNode* node = r.node;
+                    ThisNode* node = r.front_node;
                     _RemoveAllBut!N(node);
                     dealloc(node);
                     r.popFront();
@@ -1658,7 +1655,6 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
         }
         Container c;   
         private Node* _begin;
-        alias _begin node;
         private Node* _end;
 
         this(Container _c, Node* b, Node* e) {
@@ -1675,12 +1671,17 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
             return _begin is _end;
         }
 
+        alias _begin front_node;
+
+        @property back_node() {
+            return _end.index!N.prev;
+        }
         /**
          * Returns the first element in the range
          */
         @property front() 
         {
-            return _begin.value;
+            return front_node.value;
         }
 
         /**
@@ -1688,7 +1689,7 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
          */
         @property back() 
         {
-            return _end.index!N.prev.value;
+            return back_node.value;
         }
 
         /**
@@ -2012,7 +2013,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 
     void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
     if(is(SomeRange == OrderedRange)) {
-        Node node = r.node;
+        Node node = r.front_node;
         _Modify(node, mod);
     }
 /**
@@ -2021,7 +2022,7 @@ Returns: whether replacement succeeded
 Complexity: ??
 */
     bool replace(OrderedRange r, ValueView value) {
-        ThisNode* node = r.node;
+        ThisNode* node = r.front_node;
         return _Replace(node, cast(Value) value);
     }
 
@@ -2765,20 +2766,24 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
                     e = _e;
                 }
 
-                @property Node* node() {
+                @property Node* front_node() {
                     return c.index!N._heap[s];
                 }
 
                 @property front(){ 
-                    return c.index!N._heap[s].value; 
+                    return front_node.value;
                 }
 
                 void popFront(){ 
                     s++;
                 }
 
+                @property back_node(){
+                    return c.index!N._heap[e-1]; 
+                }
+
                 @property back(){
-                    return c.index!N._heap[e-1].value; 
+                    return back_node.value;
                 }
                 void popBack(){ 
                     e--;
@@ -2917,7 +2922,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
                 if(IsMyRange!SomeRange) {
-                    ThisNode* node = r.node;
+                    ThisNode* node = r.front_node;
                     _Modify(node, mod);
                 }
 /**
@@ -2927,7 +2932,7 @@ Complexity: ??
 */
             bool replace(HeapRange r, ValueView value)
             {
-                ThisNode* node = r.node;
+                ThisNode* node = r.front_node;
                 return _Replace(node, cast(Value) value);
             }
 
@@ -3052,9 +3057,9 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
             if (is(R == HeapRange) || is(R == Take!HeapRange)){
                 while(!r.empty){
                     static if(is(R == HeapRange)){
-                        ThisNode* node = r.node;
+                        ThisNode* node = r.front_node;
                     }else{
-                        ThisNode* node = r.source.node;
+                        ThisNode* node = r.source.front_node;
                     }
                     r.popFront();
                     _RemoveAll(node);
@@ -3217,6 +3222,7 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
                 }
                 Container c;
                 Node* node;
+                alias node front_node;
                 size_t n;
 
                 this(Container _c, Node* _node, size_t _n) {
@@ -3484,7 +3490,7 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH n) for this index ($(BIGOH 1) on a good
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
             if(IsMyRange!SomeRange) {
-                ThisNode* node = r.node;
+                ThisNode* node = r.front_node;
                 _Modify(node, mod);
             }
 /**
@@ -3494,7 +3500,7 @@ Complexity: ??
 */
             bool replace(SomeRange)(SomeRange r, ValueView value)
             if(IsMyRange!SomeRange){
-                ThisNode* node = r.node;
+                ThisNode* node = r.front_node;
                 return _Replace(node, cast(Value) value);
             }
 
@@ -3696,13 +3702,13 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 ThisNode* newfirst;
                 size_t newfindex = -1;
                 while(!r.empty){
-                    ThisNode* node = r.node;
+                    ThisNode* node = r.front_node;
                     ThisNode* node2 = node;
                     auto k = key(node.value);
                     size_t index = hash(key(node.value))%newhashes.length;
                     r.popFront();
                     while(!r.empty && eq(k, key(r.front))){
-                        node2 = r.node;
+                        node2 = r.front_node;
                         r.popFront();
                     }
                     version(BucketHackery){
@@ -3819,10 +3825,10 @@ $(BIGOH n $(SUB r)) for this index
                 is(R == Take!HashedRange) || is(R == Take!BucketSeqRange)){
                 while(!r.empty){
                     static if( is(R == HashedRange) || is(R == BucketSeqRange)){
-                        ThisNode* node = r.node;
+                        ThisNode* node = r.front_node;
                     }else static if(
                             is(R == Take!HashedRange) || is(R == Take!BucketSeqRange)){
-                        ThisNode* node = r.source.node;
+                        ThisNode* node = r.source.front_node;
                     }else static assert(false);
                     r.popFront();
                     _RemoveAll(node);
@@ -3953,6 +3959,73 @@ template HashedUnique(alias KeyFromValue="a",
 template HashedNonUnique(alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){
     alias Hashed!(true, KeyFromValue, Hash, Eq) HashedNonUnique;
+}
+
+
+class Position(MNode) {
+    alias MNode.ThisContainer.ValueView ValueView;
+
+    @property ValueView v() {
+        return node.value;
+    }
+
+    private:
+        MNode* node;
+
+        this(MNode* _node) {
+            node = _node;
+        }
+}
+
+auto PSR(Range)(Range rng) 
+{
+    alias Position!(typeof(*rng.front_node)) Pos;
+
+    struct PositionRange {
+
+        Range source;
+
+        @property empty() {
+            return source.empty();
+        }
+
+        @property Pos front() {
+            return new Pos(source.front_node);
+        }
+
+        void popFront() {
+            source.popFront();
+        }
+
+        static if(isBidirectionalRange!Range) {
+            @property Pos back() {
+                return new Pos(source.back_node);
+            }
+
+            void popBack() {
+                source.popBack();
+            }
+        }
+
+        static if(isForwardRange!Range) {
+            @property save() {
+                return PositionRange(source.save());
+            }
+        }
+
+        static if(isRandomAccessRange!Range) {
+            auto opIndex(size_t i) {
+                return source.nth_node(i);
+            }
+        }
+        static if(hasLength!Range) {
+            @property length() {
+                return source.length;
+            }
+        }
+    }
+
+    return PositionRange(rng);
 }
 
 struct IndexedBy(L...)
@@ -4248,7 +4321,8 @@ n2.index!1 .next = n1;
 n1.index!2 .left = n2;
 ----
 +/
-struct MNode(ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
+struct MNode(_ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
+    alias _ThisContainer ThisContainer;
     Value value;
 
     static if(Signals.AllSignals.length > 0) {
@@ -4964,7 +5038,7 @@ denied:
     void _Clear(){
         auto r = index!0 .opSlice();
         while(!r.empty){
-            ThisNode* node = r.node;
+            ThisNode* node = r.front_node;
             r.popFront();
             dealloc(node);
         }
@@ -5003,7 +5077,7 @@ denied:
         static if(N == RangeIndexNo!Range0){
             return r;
         }else{
-            return index!N.fromNode(r.node);
+            return index!N.fromNode(r.front_node);
         }
     }
 

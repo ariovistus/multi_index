@@ -38,39 +38,40 @@ unittest{
     assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13]));
     auto r = c[];
     popFrontN(r, 6);
-    auto t = take(r, 3);
+    auto t = take(PSR(r), 3);
     c.remove(t);
     assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
     r = c[];
     popFrontN(r, 7);
     c.remove(r);
     assert(equal(c[], [-1,0,0,8,1,2,67]));
-
-    r = c[];
-    while(!r.empty){
-        if (r.front() < 2) r.removeFront();
-        else r.popFront();
-    }
+    c.remove(filter!"a.v < 2"(PSR(c[])));
     assert(equal(c[], [8,2,67]));
-    r = c[];
-    while(!r.empty){
-        if (r.back() < 3) r.removeBack();
-        else r.popBack();
-    }
+    c.remove(filter!"a.v < 3"(retro(PSR(c[]))));
     assert(equal(c[], [8,67]));
     c.insertFront([1,5,223,9,10]);
     assert(equal(c[], [1,5,223,9,10,8,67]));
+
+    c.modify(filter!"a.v % 2 == 1"(PSR(c[])), 
+            (ref int i) { i = -i; });
+    /+
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
+    +/
     assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
-    auto rr = retro(c[]);
+
+    c.modify(filter!"a.v % 3 != 0"(retro(PSR(c[]))),
+            (ref int i){ i = -i; });
+    /+
+    auto rr = retro(PSR(c[]));
     while(!rr.empty){
-        if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
+        if(rr.front.v % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
+    +/
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
 
     c.front = 4;
@@ -116,39 +117,40 @@ unittest{
     assert(equal(c[], [-1,0,0,8,1,2,1,2,45,67,101,13]));
     auto r = c[];
     popFrontN(r, 6);
-    auto t = take(r, 3);
+    auto t = take(PSR(r), 3);
     c.remove(t);
     assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
     r = c[];
     popFrontN(r, 7);
     c.remove(r);
     assert(equal(c[], [-1,0,0,8,1,2,67]));
-
-    r = c[];
-    while(!r.empty){
-        if (r.front() < 2) r.removeFront();
-        else r.popFront();
-    }
+    c.remove(filter!"a.v < 2"(PSR(c[])));
     assert(equal(c[], [8,2,67]));
-    r = c[];
-    while(!r.empty){
-        if (r.back() < 3) r.removeBack();
-        else r.popBack();
-    }
+    c.remove(filter!"a.v < 3"(retro(PSR(c[]))));
     assert(equal(c[], [8,67]));
     c.insertFront([1,5,223,9,10]);
     assert(equal(c[], [1,5,223,9,10,8,67]));
+
+    c.modify(filter!"a.v % 2 == 1"(PSR(c[])),
+            (ref int i){ i = -i; });
+    /+
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
+    +/
+
     assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
-    auto rr = retro(c[]);
+    c.modify(filter!"a.v % 3 != 0"(retro(PSR(c[]))),
+            (ref int i){ i = -i; });
+    /+
+    auto rr = retro(PSR(c[]));
     while(!rr.empty){
-        if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
+        if(rr.front.v % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
+    +/
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
 
 }
@@ -200,7 +202,7 @@ unittest{
     assert(equal(d[], [1,2,1,2,45,67,101,-1,0,0,8,13]));
     auto r = c[];
     popFrontN(r, 6);
-    auto t = take(r, 3);
+    auto t = take(PSR(r), 3);
     c.remove(t);
     assert(equal(c[], [-1,0,0,8,1,2,67,101,13]));
     assert(equal(d[], [1,2,67,101,-1,0,0,8,13]));
@@ -210,35 +212,35 @@ unittest{
     assert(equal(c[], [-1,0,0,8,1,2,67]));
     assert(equal(d[], [1,2,67,-1,0,0,8]));
 
-    r = c[];
-    while(!r.empty){
-        if (r.front() < 2) r.removeFront();
-        else r.popFront();
-    }
+    c.remove(filter!"a.v < 2"(PSR(c[])));
     assert(equal(c[], [8,2,67]));
     assert(equal(d[], [2,67,8]));
-    auto r2 = d[];
-    while(!r2.empty){
-        if (r2.back() < 3) r2.removeBack();
-        else r2.popBack();
-    }
+    c.remove(filter!"a.v < 3"(PSR(d[])));
     assert(equal(c[], [8,67]));
     assert(equal(d[], [67,8]));
     c.insertFront([1,5,223,9,10]);
     assert(equal(c[], [1,5,223,9,10,8,67]));
     assert(equal(d[], [67,8,1,5,223,9,10]));
+    c.modify(filter!"a.v % 2 == 1"(PSR(c[])), 
+            (ref int i) { i = -i; });
+    /+
     r = c[];
     while(!r.empty){
         if(r.front % 2) c.modify(r, (ref int i){ i = -i; });
         r.popFront();
     }
+    +/
     assert(equal(c[], [-1,-5,-223,-9,10,8,-67]));
     assert(equal(d[], [-67,8,-1,-5,-223,-9,10]));
-    auto rr = retro(c[]);
+    c.modify(filter!"a.v % 3 != 0"(retro(PSR(c[]))),
+            (ref int i){ i = -i; });
+    /+
+    auto rr = retro(PSR(c[]));
     while(!rr.empty){
-        if(rr.front % 3) c.modify(rr, (ref int i){ i = -i; });
+        if(rr.front.v % 3) c.modify(rr, (ref int i){ i = -i; });
         rr.popFront();
     }
+    +/
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
     assert(equal(d[], [67,-8,1,5,223,-9,-10]));
 }
@@ -276,7 +278,7 @@ unittest{
     auto r = c[];
     r.popFront();
     assert(equal(r.save(),[new A(4,2,4.2), new A(10,20,42)]));
-    c.modify(r, (ref A a){ a.j = 55; a.d = 3.14; });
+    c.modify(takeOne(PSR(r)), (ref A a){ a.j = 55; a.d = 3.14; });
     assert(equal(c[], [new A(1,2,3.4), new A(4,55,3.14), new A(10,20,42)]));
     c.insertFront(new A(3,2,1.1));
     assert(equal(c[], [new A(3,2,1.1), new A(1,2,3.4), new A(4,55,3.14), 

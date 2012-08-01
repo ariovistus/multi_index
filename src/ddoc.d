@@ -850,23 +850,6 @@ bidirectional range
             /// _
             void popBack();
 
-            static if(!is_const) {
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
-*/
-            void removeFront();
-
-/**
-Pops back and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH 1) for this index
-*/
-            void removeBack();
-            }
         }
 
         alias TypeTuple!(N,Range) IndexTuple;
@@ -937,43 +920,44 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
 
             void clear();
 /**
-Moves moveme.front to the position before tohere.front and inc both ranges.
-Probably not safe to use either range afterwards, but who knows. 
+Moves moveme.front to the position before tohere.front and increments moveme.
+Takes either a range from this index, or any positional range.
 Preconditions: moveme and tohere are both ranges of the same container
-Postconditions: moveme.front is incremented
+Postconditions: moveme is incremented
 Complexity: $(BIGOH 1)
 */
-            void relocateFront(ref SeqRange moveme, SeqRange tohere);
+            void relocateFront(PosRange)(ref PosRange moveme, PosRange tohere)
+            if(is(ElementType!PosRange == Position!(ThisNode)) ||
+               is(PosRange == SeqRange));
 /**
-Moves moveme.back to the position after tohere.back and dec both ranges.
-Probably not safe to use either range afterwards, but who knows. 
+Moves moveme.back to the position after tohere.back and decrements moveme.
+Takes either a range from this index, or any positional range.
 Preconditions: moveme and tohere are both ranges of the same container
 Postconditions: moveme.back is decremented
 Complexity: $(BIGOH 1)
 */
-            void relocateBack(ref SeqRange moveme, SeqRange tohere);
+            void relocateBack(PosRange)(ref PosRange moveme, PosRange tohere)
+            if(is(ElementType!PosRange == Position!(ThisNode)) ||
+               is(PosRange == SeqRange));
 
 /**
-Perform mod on r.front and performs any necessary fixups to container's 
-indeces. If the result of mod violates any index' invariant, r.front is
+Perform mod on elements of r and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, the element is
 removed from the container.
-Preconditions: !r.empty, $(BR)
-mod is a callable of the form void mod(ref Value) 
-Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index 
+Preconditions: mod is a callable of the form void mod(ref Value) 
+Complexity: $(BIGOH n $(SUB r) * m(n)), $(BR) $(BIGOH n $(SUB r)) for this index 
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
             if(is(SomeRange == SeqRange) || 
-                    is(SomeRange == typeof(retro(SeqRange.init)))); 
+               is(ElementType!SomeRange == Position!(ThisNode)));
 
 /**
-Replaces r.front with value
+Replaces value at r with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, Value value)
-            if(is(SomeRange == SeqRange) || 
-                    is(SomeRange == typeof(retro(SeqRange.init))));
+            bool replace(Position!ThisNode r, Value value);
 
             bool _insertFront(ThisNode* node) nothrow;
 
@@ -1054,11 +1038,14 @@ Forwards to removeBack
 
 /++
 Removes the values of r from the container.
+Takes either a range from this index, or any positional range.
+Returns: an empty range (EMN: why?)
 Preconditions: r came from this index
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
 +/
             SeqRange remove(R)(R r)
-            if(is(R == SeqRange) || is(R == Take!SeqRange));
+            if(is(R == SeqRange) || 
+               is(ElementType!R == Position!ThisNode));
 
             void _Check();
 
@@ -2384,6 +2371,28 @@ template HashedUnique(alias KeyFromValue="a",
 /// _
 template HashedNonUnique(alias KeyFromValue="a", 
         alias Hash="??", alias Eq="a==b"){}
+
+/**
+Encapsulates a container item and its position in the container.
+Access the item via
+-----
+position.v
+-----
+Don't access container internals.
+*/
+class Position(MNode) {
+    /// _
+    @property v() {
+        return node.value;
+    }
+    private:
+        MNode* node;
+}
+
+/**
+Extract a positional range from an index's range.
+*/
+auto PSR(Range)(Range rng);
 
 /++
 Encapsulate the list of indeces to be used by the container.
