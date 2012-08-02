@@ -1569,7 +1569,7 @@ $(BIGOH log(n))
     }
 
 /**
-Perform mod on r.front and performs any necessary fixups to container's 
+Perform mod on elements of r and performs any necessary fixups to container's 
 indeces. If the result of mod violates any index' invariant, r.front is
 removed from the container.
 Preconditions: !r.empty, $(BR)
@@ -1578,13 +1578,14 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 */
 
     void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-    if(is(SomeRange == Range)) ;
+    if(is(SomeRange == OrderedRange) ||
+       is(ElementType!SomeRange == Position!ThisNode));
 /**
-Replaces r.front with value
+Replaces value at r with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-    bool replace(Range r, ValueView value) ;
+    bool replace(Position!ThisNode r, ValueView value);
 
     KeyType _NodePosition(ThisNode* node);
 
@@ -1646,15 +1647,14 @@ Complexity: ??
     /++
         Removes the given range from the container.
 
-        Returns: A range containing all of the elements that were after the
-        given range.
+        Returns: An empty range.
 
         Complexity:$(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
                 log(n)) for this index
     +/
-    OrderedRange remove(OrderedRange r);
-    /// ditto
-    OrderedRange remove(Take!OrderedRange r);
+    OrderedRange remove(R)(R r)
+    if(is(R == OrderedRange) || 
+       is(ElementType!R == Position!ThisNode));
 
     /++
    Removes elements from the container that are equal to the given values

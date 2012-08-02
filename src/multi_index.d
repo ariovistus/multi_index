@@ -1699,7 +1699,9 @@ mixin template OrderedIndex(size_t N, bool allowDuplicates, alias KeyFromValue, 
             return _begin is _end;
         }
 
-        alias _begin front_node;
+        @property front_node() {
+            return _begin;
+        };
 
         @property back_node() {
             return _end.index!N.prev;
@@ -2040,18 +2042,25 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 */
 
     void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-    if(is(SomeRange == OrderedRange)) {
-        Node node = r.front_node;
-        _Modify(node, mod);
+    if(is(SomeRange == OrderedRange) ||
+       is(ElementType!SomeRange == Position!ThisNode)) {
+        while(!r.empty) {
+            static if(is(SomeRange == OrderedRange)) {
+                Node node = r.front_node;
+            }else {
+                Node node = r.front.node;
+            }
+            r.popFront();
+            _Modify(node, mod);
+        }
     }
 /**
 Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-    bool replace(OrderedRange r, ValueView value) {
-        ThisNode* node = r.front_node;
-        return _Replace(node, cast(Value) value);
+    bool replace(Position!ThisNode r, ValueView value) {
+        return _Replace(r.node, cast(Value) value);
     }
 
     KeyType _NodePosition(ThisNode* node){
@@ -2266,25 +2275,21 @@ Complexity: ??
                 log(n)) for this index
     +/
     OrderedRange remove(R)(R r)
-    if(is(R == OrderedRange) || is(R == Take!OrderedRange))
+    if(is(R == OrderedRange) || 
+       is(ElementType!R == Position!ThisNode))
     out(r){
         version(RBDoChecks) _Check();
     }body{
-        static if(IsMyRange!R) {
-            auto b = r._begin;
-            auto e = r._end;
-        }else {
-            auto b = r.source._begin;
-            while(!r.empty)
-                r.popFront(); // move take range to its last element
-
-            auto e = r.source._begin;
+        while(!r.empty) {
+            static if(is(R == OrderedRange)) {
+                auto node = r.front_node;
+            }else{
+                auto node = r.front.node;
+            }
+            r.popFront(); 
+            _RemoveAll!N(node);
         }
-        while(b !is e)
-        {
-            b = _RemoveAll!N(b);
-        }
-        return OrderedRange(this, e, _end);
+        return OrderedRange(this, _end, _end);
     }
 
     /++
