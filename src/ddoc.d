@@ -315,7 +315,7 @@ c.removeAny()
 Removes the value at the back of the index.
 )))
 $(TR  $(TD $(D
-c.linearRemove(r)
+c.remove(r)
 ))$(TD $(TEXTWITHCOMMAS 
 Removes the values in range $(D r) from the container.
 )))
@@ -921,7 +921,8 @@ Complexity: $(BIGOH r(n)); $(BR) $(BIGOH 1) for this index
             void clear();
 /**
 Moves moveme.front to the position before tohere.front and increments moveme.
-Takes either a range from this index, or any positional range.
+Takes either a range from this index, or any positional range originating
+from this index.
 Preconditions: moveme and tohere are both ranges of the same container
 Postconditions: moveme is incremented
 Complexity: $(BIGOH 1)
@@ -931,7 +932,8 @@ Complexity: $(BIGOH 1)
                is(PosRange == SeqRange));
 /**
 Moves moveme.back to the position after tohere.back and decrements moveme.
-Takes either a range from this index, or any positional range.
+Takes either a range from this index, or any positional range originating
+from this index.
 Preconditions: moveme and tohere are both ranges of the same container
 Postconditions: moveme.back is decremented
 Complexity: $(BIGOH 1)
@@ -1038,7 +1040,8 @@ Forwards to removeBack
 
 /++
 Removes the values of r from the container.
-Takes either a range from this index, or any positional range.
+Takes either a range from this index, or any positional range originating
+from this index.
 Returns: an empty range (EMN: why?)
 Preconditions: r came from this index
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
@@ -1096,16 +1099,6 @@ template RandomAccess() {
                 /// _
                 void popFront();
 
-                static if(!is_const) {
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
-*/
-                void removeFront();
-                }
-
                 /// _
                 @property bool empty()const;
                 /// _
@@ -1119,16 +1112,6 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 /// _
                 void popBack();
-
-                static if(!is_const) {
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
-*/
-                void removeBack();
-                }
 
                 /// _
                 @property save(){ return this; }
@@ -1275,33 +1258,35 @@ for this index
             alias insertBack insert;
 
 /**
-Perform mod on r.front and performs any necessary fixups to container's 
-indeces. If the result of mod violates any index' invariant, r.front is
+Perform mod on elements of r and performs any necessary fixups to container's 
+indeces. If the result of mod violates any index' invariant, the element is
 removed from the container.
-Preconditions: !r.empty, $(BR)
-mod is a callable of the form void mod(ref Value) 
+Preconditions: mod is a callable of the form void mod(ref Value) 
 Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index 
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
             if(is(SomeRange == RARange) || 
-                    is(SomeRange == typeof(retro(RARange.init)))) ;
+               is(ElementType!SomeRange == Position!(ThisNode)));
 /**
-Replaces r.front with value
+Replaces the value at r with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, ValueView value)
-            if(is(SomeRange == RARange) || 
-                    is(SomeRange == typeof(retro(RARange.init))));
+            bool replace(Position!ThisNode r, ValueView value);
 
 /**
-removes elements of r from this container.
+Removes elements of r from this container.
+Takes either a range from this index, or any positional range originating 
+from this index. 
+Returns: 
+An empty range.
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n)
 for this index
 */
-            RARange linearRemove(Range)(Range r)
-            if(IsMyRange!Range);
+            RARange remove(Range)(Range r)
+            if(is(Range == RARange) ||
+               is(ElementType!Range == Position!ThisNode));
 
             void _Check();
 

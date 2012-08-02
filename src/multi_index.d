@@ -19,7 +19,7 @@ version = BucketHackery;
 import std.array;
 import std.range;
 import std.exception: enforce;
-import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll;
+import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll, sort, map;
 import std.traits: isImplicitlyConvertible, isDynamicArray;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
@@ -655,8 +655,8 @@ template RandomAccess() {
         alias TypeTuple!(N,ThisContainer) IndexTuple;
 
         // node implementation 
-        // all the overhead is in the index
         mixin template NodeMixin(){
+            size_t _index;
         }
 
         /// index implementation 
@@ -705,21 +705,6 @@ template RandomAccess() {
 
                 void popFront(){ s++; }
 
-                static if(!is_const) {
-                /**
-                  Pops front and removes it from the container.
-                  Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
-                 */
-                void removeFront(){
-                    Node* node = c.index!N.ra[s];
-                    c._RemoveAll(node);
-                    // c will shift everything down
-                    e--;
-                }
-                }
-
                 @property bool empty()const{ return s >= e; }
                 @property size_t length()const { return s <= e ? e-s : 0; }
 
@@ -729,30 +714,43 @@ Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
 
                 void popBack(){ e--; }
 
-                static if(!is_const) {
-/**
-Pops front and removes it from the container.
-Does not invalidate this range.
-Preconditions: !empty
-Complexity: $(BIGOH d(n)), $(BR) $(BIGOH n) for this index
-*/
-                void removeBack(){ 
-                    Node* node = c.index!N.ra[e-1];
-                    c._RemoveAll(node);
-                    // c will shift everything down
-                    e--;
-                }
-                }
-
                 @property save(){ return this; }
 
                 auto opIndex(size_t i){ return nth_node(i).value; }
 
-                auto nth_node(size_t i) { return c.index!N.ra[i]; }
+                private auto nth_node(size_t i) { return c.index!N.ra[i]; }
+
+                auto opSlice(size_t a, size_t b) {
+                    assert(a <= b && b < length);
+                    return RARangeT(c, s+a, s+b);
+                }
+
+                static if(!is_const) {
+                    private @property front_node(ThisNode* n) {
+                        assert(s < e && e <= c.index!N.length);
+                        c.index!N.ra[s] = n;
+                    }
+                }
             }
+
 
             alias RARangeT!true ConstRARange;
             alias RARangeT!false RARange;
+
+            /*
+    static assert(is(typeof(
+    {
+        RARange r = void;       // can define a range object
+        if (r.empty) {}   // can test for empty
+        r.popFront();     // can invoke popFront()
+        auto h = r.front; // can get the front of the range
+    })));
+
+            static assert(isInputRange!RARange);
+            static assert(isForwardRange!RARange);
+            static assert(isBidirectionalRange!RARange);
+            static assert(isRandomAccessRange!RARange);
+            */
 
             template IsMyRange(T) {
                 enum bool IsMyRange = 
@@ -898,6 +896,7 @@ Complexity: $(BIGOH 1)
             void swapAt( size_t i, size_t j){
                 enforce(i < length && j < length);
                 swap(ra[i], ra[j]);
+                swap(ra[i].index!N._index, ra[j].index!N._index);
             }
 
 /**
@@ -914,13 +913,12 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
             alias removeBack removeAny;
 
             void _Remove(ThisNode* n){
-                foreach(i, item; ra[0 .. node_count]){
-                    if(item is n){
-                        copy(ra[i+1 .. node_count], ra[i .. node_count-1]);
-                        ra[node_count-1] = null;
-                        return;
-                    }
-                }
+                size_t i = n.index!N._index;
+                copy(ra[i+1 .. node_count], ra[i .. node_count-1]);
+                foreach(k,r; ra[i .. node_count-1]) 
+                    r.index!N._index = i+k;
+                ra[node_count-1] = null;
+                return;
             }
 
 /**
@@ -965,6 +963,7 @@ for this index
                     reserve(max(ra.length * 2 + 1, node_count+1));
                 }
                 ra[node_count] = node;
+                ra[node_count].index!N._index = node_count;
             }
 
 /**
@@ -985,54 +984,90 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH 1) for this index
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
             if(is(SomeRange == RARange) || 
-                    is(SomeRange == typeof(retro(RARange.init)))) {
-                static if(is(SomeRange == RARange)){
-                    ThisNode* node = r.front_node;
-                }else{
-                    ThisNode* node = ra[r.source.e-1];
+               is(ElementType!SomeRange == Position!(ThisNode))) {
+                while(!r.empty) {
+                    static if(is(SomeRange == RARange)){
+                        ThisNode* node = r.front_node;
+                    }else{
+                        ThisNode* node = r.front.node;
+                    }
+                    _Modify(node, mod);
+                    r.popFront();
                 }
-                _Modify(node, mod);
             }
 /**
 Replaces r.front with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(SomeRange)(SomeRange r, ValueView value)
-            if(is(SomeRange == Range) || 
-                    is(SomeRange == typeof(retro(Range.init)))){
-                static if(is(SomeRange == Range)){
-                    ThisNode* node = r.front_node;
-                }else{
-                    ThisNode* node = ra[r.source.e-1];
-                }
-                return _Replace(node, cast(Value) value);
+            bool replace(Position!ThisNode r, ValueView value) {
+                return _Replace(r.node, cast(Value) value);
             }
 
+            static bool _RemovePred(Position!ThisNode a, Position!ThisNode b) {
+                return a.node.index!N._index < b.node.index!N._index;
+            }
+            static size_t _RemoveUn(Position!ThisNode a) {
+                return a.node.index!N._index;
+            }
+            static size_t _RemoveUn2(ThisNode* a) {
+                return a.index!N._index;
+            }
 /**
 removes elements of r from this container.
 Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n)
 for this index
 */
-            RARange linearRemove(Range)(Range r)
-            if(IsMyRange!Range) {
-                size_t _length = node_count;
-                size_t s = r.s;
-                size_t e = r.e;
-                size_t newlen = _length - (e-s);
-                while(!r.empty){
-                    ThisNode* node = r.front_node;
-                    _RemoveAllBut!N(node);
-                    dealloc(node);
-                    r.popFront();
+            RARange remove(Range)(Range r)
+            if(is(Range == RARange) ||
+               is(ElementType!Range == Position!ThisNode)) {
+                static if(is(Range == RARange)) {
+                    // definitely contiguous
+                    size_t _length = node_count;
+                    size_t s = r.front_node.index!N._index;
+                    size_t e = r.back_node.index!N._index+1;
+                    size_t newlen = _length - (e-s);
+                    while(!r.empty){
+                        ThisNode* node = r.front_node;
+                        _RemoveAllBut!N(node);
+                        dealloc(node);
+                        r.popFront();
+                    }
+                    copy(ra[e .. _length], ra[s .. newlen]);
+                    foreach(k, rx; ra[s .. newlen]) {
+                        rx.index!N._index = s+k;
+                    }
+                    fill(ra[newlen .. _length], cast(ThisNode*) null);
+                    _length -= e-s;
+                }else {
+                    // maybe not contiguous
+                    // need to be efficient with moving chunks
+                    auto arr = allocatedArray!Allocator(r);
+                    sort!_RemovePred(arr);
+                    if(arr.length == 1) _RemoveAll(arr[0].node);
+                    else{
+                        auto ixs = map!_RemoveUn(arr);
+                        auto ab = zip(ixs, chain(drop(ixs, 1), [node_count]));
+                        size_t p = ixs.front;
+                        foreach(a,b; ab) {
+                            auto pstart = p;
+                            p += b-a-1;
+                            _RemoveAllBut!N(ra[a]);
+                            dealloc(ra[a]);
+                            copy(ra[a+1 .. b], ra[pstart .. p]);
+                            foreach(k, n; arr[pstart .. p]) 
+                                n.node.index!N._index = pstart+k;
+                        }
+                        fill(ra[p .. $], cast(ThisNode*) null);
+                    }
                 }
-                copy(ra[e .. _length], ra[s .. newlen]);
-                fill(ra[newlen .. _length], cast(ThisNode*) null);
-                _length -= e-s;
-                return RARange(this, s, _length);
+                return RARange(this, 0, 0);
             }
 
             void _Check(){
+                foreach(i, n; ra[0 .. node_count]) {
+                    assert(n.index!N._index == i);
+                }
             }
 
             string toString0(){
@@ -1047,14 +1082,7 @@ for this index
             }
 
             private RARange fromNode(ThisNode* n){
-                // Oh NO! linear search!
-                size_t ix = -1;
-                foreach(i,_n; this.index!N.ra){
-                    if(_n is n){
-                        ix = i;
-                        break;
-                    }
-                }
+                size_t ix = n.index!N._index;
                 return RARange(this, ix, this.node_count);
             }
         }
@@ -4017,10 +4045,17 @@ auto PSR(Range)(Range rng)
             auto opIndex(size_t i) {
                 return source.nth_node(i);
             }
-        }
-        static if(hasLength!Range) {
+
             @property length() {
                 return source.length;
+            }
+
+            @property front(typeof(source.front_node) n) {
+                source.front_node = n;
+            }
+
+            @property opSlice(size_t a, size_t b) {
+                return PositionRange(source[a .. b]);
             }
         }
     }
