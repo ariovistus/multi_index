@@ -617,6 +617,7 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                         ThisNode* f = r.front_node;
                     }else{
                         ThisNode* f = r.front.node;
+                        r.front.obliterated = true;
                     }
                     r.popFront();
                     _RemoveAll(f);
@@ -1060,6 +1061,7 @@ for this index
                         }
                         fill(ra[p .. $], cast(ThisNode*) null);
                     }
+                    foreach(p; arr) p.obliterated = true;
                 }
                 return RARange(this, 0, 0);
             }
@@ -2259,6 +2261,7 @@ Complexity: ??
                 auto node = r.front_node;
             }else{
                 auto node = r.front.node;
+                r.front.obliterated = true;
             }
             r.popFront(); 
             _RemoveAll!N(node);
@@ -3060,6 +3063,7 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                         ThisNode* node = r.front_node;
                     }else{
                         ThisNode* node = r.front.node;
+                        r.front.obliterated = true;
                     }
                     r.popFront();
                     _RemoveAll(node);
@@ -3814,6 +3818,7 @@ $(BIGOH n $(SUB r)) for this index
                         ThisNode* node = r.front_node;
                     }else{
                         ThisNode* node = r.front.node;
+                        r.front.obliterated = true;
                     }
                     r.popFront();
                     _RemoveAll(node);
@@ -3955,10 +3960,18 @@ class Position(MNode) {
     }
 
     private:
-        MNode* node;
+        bool obliterated = true;
+        MNode* _node;
 
         this(MNode* _node) {
-            node = _node;
+            obliterated = false;
+            this._node = _node;
+        }
+
+        @property node() {
+            enforce(!obliterated, 
+                    "this position no longer exists in container");
+            return _node;
         }
 }
 
