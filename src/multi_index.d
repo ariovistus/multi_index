@@ -2860,8 +2860,6 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
                     }
             }
 
-
-
 /**
 Fetch a range that spans all the elements in the container.
 
@@ -2918,29 +2916,23 @@ Complexity: $(BIGOH 1)
                 _Clear();
             }
 
-/**
-Perform mod on r.front and performs any necessary fixups to container's 
-indeces. If the result of mod violates any index' invariant, r.front is
-removed from the container.
-Preconditions: !r.empty, $(BR)
-mod is a callable of the form void mod(ref Value) 
-Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index 
-*/
-
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-                if(IsMyRange!SomeRange) {
-                    ThisNode* node = r.front_node;
-                    _Modify(node, mod);
-                }
-/**
-Replaces r.front with value
-Returns: whether replacement succeeded
-Complexity: ??
-*/
-            bool replace(HeapRange r, ValueView value)
+                if(is(SomeRange == HeapRange) ||
+                   is(ElementType!SomeRange == Position!ThisNode)) {
+                    while(!r.empty) {
+                        static if(is(SomeRange == HeapRange)) {
+                            ThisNode* node = r.front_node;
+                        }else{
+                            ThisNode* node = r.front.node;
+                        }
+                        r.popFront();
+                        _Modify(node, mod);
+                    }
+            }
+
+            bool replace(Position!ThisNode r, ValueView value)
             {
-                ThisNode* node = r.front_node;
-                return _Replace(node, cast(Value) value);
+                return _Replace(r.node, cast(Value) value);
             }
 
             KeyType _NodePosition(ThisNode* node){
@@ -3061,12 +3053,13 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
             }
 
             HeapRange remove(R)(R r)
-            if (is(R == HeapRange) || is(R == Take!HeapRange)){
+            if (is(R == HeapRange) || 
+                is(ElementType!R == Position!ThisNode)){
                 while(!r.empty){
                     static if(is(R == HeapRange)){
                         ThisNode* node = r.front_node;
                     }else{
-                        ThisNode* node = r.source.front_node;
+                        ThisNode* node = r.front.node;
                     }
                     r.popFront();
                     _RemoveAll(node);

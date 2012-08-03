@@ -1939,7 +1939,7 @@ Complexity: $(BIGOH 1)
             void clear();
 
 /**
-Perform mod on r.front and performs any necessary fixups to container's 
+Perform mod on elements of r and performs any necessary fixups to container's 
 indeces. If the result of mod violates any index' invariant, r.front is
 removed from the container.
 Preconditions: !r.empty, $(BR)
@@ -1948,13 +1948,14 @@ Complexity: $(BIGOH m(n)), $(BR) $(BIGOH log(n)) for this index
 */
 
             void modify(SomeRange, Modifier)(SomeRange r, Modifier mod)
-            if(IsMyRange!SomeRange) ;
+                if(is(SomeRange == HeapRange) ||
+                   is(ElementType!SomeRange == Position!ThisNode));
 /**
-Replaces r.front with value
+Replaces value at r with value
 Returns: whether replacement succeeded
 Complexity: ??
 */
-            bool replace(HeapRange r, ValueView value);
+            bool replace(Position!ThisNode r, ValueView value);
 
             KeyType _NodePosition(ThisNode* node);
 
@@ -2014,8 +2015,17 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
 */
             void removeBack();
 
+/**
+Removes the given range from the container.
+
+Returns: An empty range.
+
+Complexity:$(BIGOH n $(SUB r) * d(n)); $(BR) $(BIGOH n $(SUB r) * 
+log(n)) for this index
+*/
             HeapRange remove(R)(R r)
-            if (is(R == HeapRange) || is(R == Take!HeapRange));
+            if (is(R == HeapRange) || 
+                is(ElementType!R == Position!ThisNode));
 
             bool isLe(size_t a, size_t b);
 
