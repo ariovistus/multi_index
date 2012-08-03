@@ -2311,9 +2311,9 @@ Complexity:
 $(BIGOH n $(SUB r) * d(n)), $(BR)
 $(BIGOH n $(SUB r)) for this index
 */
-            HashedRange remove(R)( R r )
-            if( is(R == HashedRange) || is(R == BucketSeqRange) ||
-                is(R == Take!HashedRange) || is(R == Take!BucketSeqRange));
+            HashedRange remove(R)(R r)
+            if(is(R == HashedRange) || is(R == BucketSeqRange) ||
+               is(ElementType!R == Position!ThisNode));
 
 /** 
 Removes all elements with key k from this container.

@@ -35,10 +35,10 @@ unittest{
     assert(4 in c);
     assert(5 in c);
     assert(6 in c);
-    auto t = take(c[], 2);
+    auto t = take(PSR(c[]), 2);
     auto a = array(t);
     c.remove(t);
-    foreach(x; a) assert(x !in c);
+    foreach(x; a) assert(x.v !in c);
     c.insert(iota(10));
     auto r = c.equalRange(8);
     c.remove(r);
@@ -62,11 +62,11 @@ unittest{
     c.insert([4,5,6]);
     assert(set(c[]) == set([1,2,3,4,5,6])); // two 3
     assert(c.length == 7); // two 3
-    auto t = take(c[], 2);
+    auto t = take(PSR(c[]), 2);
     auto a = array(t);
     c.remove(t);
     assert(c.length == 5);
-    foreach(x; a) assert(x !in c);
+    foreach(x; a) assert(x.v !in c);
     c.insert(iota(10));
     c.insert(iota(10));
     assert(c.length == 25);
@@ -200,10 +200,10 @@ unittest{
     assert(4 in c);
     assert(5 in c);
     assert(6 in c);
-    auto t = take(c[], 2);
-    a = array(t);
+    auto t = take(PSR(c[]), 2);
+    auto a2 = array(t);
     c.remove(t);
-    foreach(x; a) assert(x !in c);
+    foreach(x; a2) assert(x.v !in c);
     c.insert(iota(10));
     auto r = c.equalRange(8);
     c.remove(r);

@@ -72,25 +72,9 @@ unittest{
     c.modify(r, (ref int i){ i = 150; });
     assert(equal(c[], [25,60,65,70,75,80,85,90,95,150]));
     c.remove(filter!"a.v % 10 == 5"(PSR(c[])));
-    /*
-    r = c[];
-    while(!r.empty){
-        if(r.front % 10 == 5) r.removeFront();
-        else r.popFront();
-    }
-    */
     assert(equal(c[], [60,70,80,90,150]));
 
     c.remove(filter!"a.v % 20 == 10"(retro(PSR(c[]))));
-    /*
-    r = c[];
-
-
-    while(!r.empty){
-        if(r.back % 20 == 10) r.removeBack();
-        else r.popBack();
-    }
-    */
     assert(equal(c[], [60,80]));
 }
 
@@ -284,20 +268,9 @@ unittest{
     assert(equal(d[], [150,95,90,85,80,75,70,65,60,25]));
     r = c[];
     c.remove(filter!"a.v % 10 == 5"(PSR(c[])));
-    /*
-    while(!r.empty){
-        if(r.front % 10 == 5) r.removeFront();
-        else r.popFront();
-    }
-    */
     assert(equal(c[], [60,70,80,90,150]));
     assert(equal(d[], [150,90,80,70,60]));
-    r = c[];
-
-    while(!r.empty){
-        if(r.back % 20 == 10) r.removeBack();
-        else r.popBack();
-    }
+    c.remove(filter!"a.v % 20 == 10"(retro(PSR(c[]))));
     assert(equal(c[], [60,80]));
     assert(equal(d[], [80,60]));
 }
