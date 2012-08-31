@@ -1,0 +1,3 @@
+MODULES = 
+	$(MODULE multi_index)
+	$(MODULE replace)
