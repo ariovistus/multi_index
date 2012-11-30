@@ -94,6 +94,34 @@ unittest{
     assert(c.empty);
 }
 
+// again, but with immutable(int)
+unittest{
+    // lone heap index
+    alias MultiIndexContainer!(immutable(int), IndexedBy!(Heap!()), Allocator) C1;
+
+    C1 c = new C1;
+    c.insert(1);
+    c.insert(2);
+    c.insert(3);
+    assert(c.front() == 3);
+    c.insert([5,6,7]);
+    assert(c.front() == 7);
+    writeln(c[]);
+    auto r = c[];
+    r.popFront();
+    c.removeFront();
+    auto tmp = r.front;
+    assert(c.front() == 6);
+    auto t = take(PSR(c[]),1);
+    c.remove(t);
+    assert(c.front() == 5);
+    assert(c.length == 4);
+    foreach(i; 0 .. 4){
+        c.removeBack();
+    }
+    assert(c.empty);
+}
+
 unittest{
     // lone heap index helper
     alias MultiIndexContainer!(int, IndexedBy!(Heap!()), Allocator) C1;

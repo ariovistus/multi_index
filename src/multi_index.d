@@ -19,7 +19,8 @@ version = BucketHackery;
 import std.array;
 import std.range;
 import std.exception: enforce;
-import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll, sort, map;
+import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll;
+import std.algorithm: move, sort, map;
 import std.traits: isImplicitlyConvertible, isDynamicArray;
 import std.metastrings: Format, toStringNow;
 import replace: Replace;
@@ -624,6 +625,30 @@ Complexity: $(BIGOH n $(SUB r) * d(n)), $(BR) $(BIGOH n $(SUB r)) for this index
                 }
                 return SeqRange(this,null,null);
             }
+              // in: old is from this index
+              // out: old is disconnected from this index and replaced by newnode
+              void _NodeReplace(ThisNode* old, ThisNode* newnode) {
+                  ThisNode* next = old.index!N.next;
+                  ThisNode* prev = old.index!N.prev;
+                  newnode.index!N.next = next;
+                  newnode.index!N.prev = prev;
+                  if(next) {
+                      next.index!N.prev = newnode;
+                  }else {
+                      assert(old is _back);
+                      _back = newnode;
+                  }
+                  if(prev) {
+                      prev.index!N.next = newnode;
+                  }else{
+                      assert(old is _front);
+                      _front = newnode;
+                  }
+  
+                  old.index!N.prev = null;
+                  old.index!N.next = null;
+              }
+  
 
             void _Check(){
             }
@@ -1064,6 +1089,11 @@ for this index
                     foreach(p; arr) p.obliterated = true;
                 }
                 return RARange(this, 0, 0);
+            }
+
+            void _NodeReplace(ThisNode* old, ThisNode* newnode) {
+                move(newnode, ra[old.index!N._index]);
+                newnode.index!N._index = old.index!N._index;
             }
 
             void _Check(){
@@ -2296,10 +2326,13 @@ Complexity: ??
         version(RBDoChecks) _Check();
     }body{
         // stack allocation - is ok
-        KeyType[Keys.length] toRemove;
-        foreach(i,k; keys)
-            toRemove[i] = k;
-        return removeKey(toRemove[]);
+        Unqual!KeyType[Keys.length] toRemove;
+        foreach(i,k; keys) {
+            Unqual!KeyType k2 = k;
+            move(k2, toRemove[i]);
+        }
+            
+        return removeKey(cast(KeyType[])(toRemove[]));
     }
 
     size_t removeKey(Key)(Key[] keys)
@@ -2624,6 +2657,35 @@ Complexity: $(BIGOH log(n))
             if(indent is 0)
                 writeln();
         }
+        void _NodeReplace(ThisNode* old, ThisNode* newnode) {
+            ThisNode* lch = old.index!N.left;
+            ThisNode* rch = old.index!N.right;
+            ThisNode* p = old.index!N.parent;
+
+            newnode.index!N.left = lch;
+            if(lch) {
+                lch.index!N._parent = newnode;
+            }
+            newnode.index!N.right = rch;
+            if(rch) {
+                rch.index!N._parent = newnode;
+            }
+            newnode.index!N._parent = p;
+            if(p) {
+                if(p.index!N.left is old) {
+                    p.index!N.left = newnode;
+                }else if(p.index!N.right is old) {
+                    p.index!N.right = newnode;
+                }
+            }else if(old is _end) {
+                _end = newnode;
+            }
+
+            newnode.index!N.left = null;
+            newnode.index!N.right = null;
+            newnode.index!N._parent = null;
+        }
+
 
         /*
          * Check the tree for validity.  This is called after every add or remove.
@@ -2849,15 +2911,15 @@ template Heap(alias KeyFromValue = "a", alias Compare = "a<b") {
                 }else 
                     while(l(n) < node_count){ 
                         auto ch = l(n);
-                        auto chk = key(_heap[ch].value);
+                        auto lk = key(_heap[ch].value);
+                        if(!less(k, lk)) break;
                         if (r(n) < node_count){
                             auto rk = key(_heap[r(n)].value);
-                            if(less(chk, rk)){
-                                chk = rk;
+                            if(less(lk, rk)){
+                                if(!less(k, rk)) break;
                                 ch = r(n);
                             }
                         }
-                        if(!less(k, chk)) break;
                         swapAt(n, ch);
                         n = ch;
                     }
@@ -3087,6 +3149,11 @@ Complexity: $(BIGOH d(n)); $(BR) $(BIGOH 1) for this index
                     result &= (isLe(r(i), i));
                 }
                 return result;
+            }
+
+            void _NodeReplace(ThisNode* old, ThisNode* newnode) {
+                move(newnode, _heap[old.index!N._index]);
+                newnode.index!N._index = old.index!N._index;
             }
 
             void _Check(){
@@ -3834,7 +3901,7 @@ Complexity:
 $(BIGOH n $(SUB k) * d(n)), $(BR)
 $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
 */
-version(OldWay){
+            version(OldWay){
             size_t removeKey(KeyType k){
                 auto r = equalRange(k);
                 size_t count = 0;
@@ -3846,14 +3913,16 @@ version(OldWay){
                 }
                 return count;
             }
-}else{
+            }else{
 
             size_t removeKey(Keys...)(Keys keys)
             if(allSatisfy!(implicitlyConverts,Keys)) {
-                KeyType[Keys.length] toRemove;
-                foreach(i,k; keys)
-                    toRemove[i] = k;
-                return removeKey(toRemove[]);
+                Unqual!KeyType[Keys.length] toRemove;
+                foreach(i,k; keys) {
+                    Unqual!KeyType k2 = k;
+                    toRemove[i] = k2;
+                }
+                return removeKey(cast(KeyType[]) (toRemove[]));
             }
 
             size_t removeKey(Key)(Key[] keys)
@@ -3893,7 +3962,26 @@ version(OldWay){
                 Allocator.deallocate(stuffy.ptr);
                 return res;
             }
-}
+            }
+
+            void _NodeReplace(ThisNode* old, ThisNode* newnode) {
+                  ThisNode* next = old.index!N.next;
+                  ThisNode* prev = old.index!N.prev;
+                  newnode.index!N.next = next;
+                  newnode.index!N.prev = prev;
+                  if(next) {
+                      next.index!N.prev = newnode;
+                  }
+                  if(prev) {
+                      prev.index!N.next = newnode;
+                  }
+                  if(old is _first) {
+                      _first = newnode;
+                  }
+  
+                  old.index!N.prev = null;
+                  old.index!N.next = null;
+            }
 
             void _Check(){
                 bool first = true;
@@ -4900,7 +4988,12 @@ if(IndexedByCount!(Args)() == 1 &&
 
     ThisNode* _InsertAllBut(size_t N)(Value value){
         ThisNode* node = Allocator.allocate!(ThisNode)(1);
-        node.value = value;
+        enum bool mutable = (__traits(compiles, {node.value = value;}));
+        static if(mutable) {
+            node.value = value;
+        }else{
+            move(ThisNode(value), *node);
+        }
 
         // connect signals to slots
         foreach(i, x; NormSignals.Mixin2Index){
@@ -5002,16 +5095,42 @@ denied:
         }
     }
 
+    template ForEachNodeReplace(string old, string newnode, size_t i) {
+        static if(i < IndexedBy.Indeces.length) {
+            enum ForEachNodeReplace = Replace!(q{
+                index!$i ._NodeReplace($old, $new);
+            }, "$i", i, "$old", old, "$new", newnode) ~ 
+            ForEachNodeReplace!(old, newnode,i+1);
+        }else{
+            enum ForEachNodeReplace = "";
+        }
+    }
+
 
     bool _Replace(ThisNode* node, Value value){
         mixin(ForEachIndexPosition!0 .ante);
         Value old = node.value;
-        node.value = value;
+        enum bool mutable = __traits(compiles, {node.value = value;});
+        static if(mutable) {
+            node.value = value;
+        }else {
+            ThisNode newnode_v = ThisNode(value);
+            ThisNode* newnode = Allocator.allocate!(ThisNode)(1);
+            move(newnode_v, *newnode);
+            mixin(ForEachNodeReplace!("node", "newnode", 0));
+        }
+        
         mixin(ForEachIndexPosition!0 .post);
         mixin(ForEachIndexPosition!0 .postpost);
+        static if(!mutable) dealloc(node);
         return true;
 denied:
-        node.value = old;
+        static if(mutable) {
+            node.value = old;
+        }else{
+            mixin(ForEachNodeReplace!("newnode", "node", 0));
+            dealloc(newnode);
+        }
         return false;
     }
 
@@ -5171,4 +5290,16 @@ void main(){
 
     C i = new C;
 
+    alias MultiIndexContainer!(const(S1),
+        IndexedBy!(OrderedUnique!("a.s"))
+        ) CCC;
+        CCC c2 = new CCC;
+        c2.insert(cast(const)S1("abc", 22));
+        pragma(msg, typeof(c2[]));
+        pragma(msg, ElementType!(typeof(c2[])));
+        foreach(const(S1) thing; c2[]) {
+        }
+
+        auto pr = PSR(c2[]);
+        c2.replace(pr.front, const(S1)("def", 44)); 
 }
