@@ -1,5 +1,6 @@
 module replace;
-import std.metastrings;
+//import std.metastrings;
+import std.conv;
 
 /**
 Performs compile time string replacements on $(D base)
@@ -70,7 +71,7 @@ template Replace(string base, T...)
     static if(N.ti == -1)
         enum Replace = base;
     else
-        enum Replace = base[0 .. N.at] ~ toStringNow!(T[N.ti+1]) ~ 
+        enum Replace = base[0 .. N.at] ~ to!string(T[N.ti+1]) ~ 
             Replace!(base[N.at + T[N.ti].length .. $], T);
 }
 

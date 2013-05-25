@@ -379,13 +379,13 @@ unittest{
             i=_i; j=_j; d=_d;
         }
 
-        bool opEquals(Object _a){
+        override bool opEquals(Object _a){
             A a = cast(A) _a;
             if (!a) return false;
             return i==a.i&&j==a.j&&d==a.d;
         }
 
-        string toString()const{
+        override string toString()const{
             return format("%s %s %s", i,j,d);
         }
     }
@@ -438,13 +438,13 @@ unittest{
             i=_i; j=_j; d=_d;
         }
 
-        bool opEquals(Object _a){
+        override bool opEquals(Object _a){
             _A a = cast(_A) _a;
             if (!a) return false;
             return i==a.i&&j==a.j&&d==a.d;
         }
 
-        string toString()const{
+        override string toString()const{
             return format("%s %s %s", i,j,d);
         }
     }
@@ -454,27 +454,27 @@ unittest{
 
     C c = new C;
 
-    c.insert( new A(1,2,3.4));
-    c.insert( new A(4,2,4.2));
-    c.insert( new A(10,20,42));
-    assert(equal(c[], [new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]));
+    c.insert( cast(immutable) new _A(1,2,3.4));
+    c.insert( cast(immutable) new _A(4,2,4.2));
+    c.insert( cast(immutable) new _A(10,20,42));
+    assert(equal(c[], [cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(10,20,42)]));
     foreach(g; c[]){}
     auto r = c[];
     r.popFront();
-    assert(equal(r.save(),[new A(4,2,4.2), new A(10,20,42)]));
+    assert(equal(r.save(),[cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(10,20,42)]));
 
-    c.insertFront(new A(3,2,1.1));
-    assert(equal(c[], [new A(3,2,1.1), new A(1,2,3.4), new A(4,2,4.2), 
-            new A(10,20,42)]));
-    c.insertFront([new A(3,2,1.1), new A(4,5,1.2)]);
-    assert(equal(c[], [new A(3,2,1.1), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]));
-    c.front = new A(2,2,2.2);
-    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,2,4.2), new A(10,20,42)]));
+    c.insertFront(cast(immutable) new _A(3,2,1.1));
+    assert(equal(c[], [cast(immutable) new _A(3,2,1.1), cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), 
+            cast(immutable) new _A(10,20,42)]));
+    c.insertFront([cast(immutable) new _A(3,2,1.1), cast(immutable) new _A(4,5,1.2)]);
+    assert(equal(c[], [cast(immutable) new _A(3,2,1.1), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
+            cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(10,20,42)]));
+    c.front = cast(immutable) new _A(2,2,2.2);
+    assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
+            cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(10,20,42)]));
     c.back = c.front;
-    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
-            new A(1,2,3.4), new A(4,2,4.2), new A(2,2,2.2)]));
+    assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
+            cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(2,2,2.2)]));
 
 }
 

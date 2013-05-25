@@ -22,7 +22,6 @@ import std.exception: enforce;
 import std.algorithm: find, swap, copy, fill, max, startsWith, moveAll;
 import std.algorithm: move, sort, map;
 import std.traits: isImplicitlyConvertible, isDynamicArray;
-import std.metastrings: Format, toStringNow;
 import replace: Replace;
 import std.typetuple: TypeTuple, staticMap, NoDuplicates, staticIndexOf, allSatisfy;
 import std.functional: unaryFun, binaryFun;
@@ -482,6 +481,7 @@ this index
                         isImplicitlyConvertible!(ElementType!SomeRange, 
                             ValueView))
                 {
+                    import std.array;
                     if(stuff.empty) return 0;
                     size_t count = 0;
                     ThisNode* prev;
@@ -3230,7 +3230,7 @@ static if(size_t.sizeof == 4){
         13835058055282163729uL, 18446744073709551557uL
     ];
 }else static assert(false, 
-        Format!("waht is this weird sizeof(size_t) == %s?", size_t.sizeof));
+        Replace!("waht is this weird sizeof(size_t) == %s?", "%s",size_t.sizeof));
 
 /// a hash table index
 /// KeyFromValue(value) = key of type KeyType
@@ -4457,7 +4457,7 @@ struct MNode(_ThisContainer, IndexedBy, Allocator, Signals, Value, ValueView) {
 
     template ForEachIndex(size_t N,L...){
         static if(L.length > 0){
-            enum indexN = Format!("index%s",N);
+            enum indexN = Replace!("index%s","%s", N);
             //alias L[0] L0;
             enum result = 
                 Replace!(q{
@@ -4718,7 +4718,7 @@ if(IndexedByAllIndeces!(FindIndexedBy!Args)().length != 0) {
     // @@@ PHOBOS ISSUE 8320 @@@
     /+
     static assert (false, 
-            Format!(/*"IndexedBy contains non-index at indeces*/" %s", 
+            Replace!(/*"IndexedBy contains non-index at indeces*/" %s", "%s", 
                 IndexedByAllIndeces!(FindIndexedBy!Args)()));
 +/
 }
@@ -4758,7 +4758,7 @@ if(IndexGarbage!(Args)().length != 0) {
     // @@@ PHOBOS ISSUE 8320 @@@
     /+
     static assert (false, 
-            Format!(/*"IndexedBy contains non-index at indeces*/" %s", 
+            Replace!(/*"IndexedBy contains non-index at indeces*/" %s", "%s", 
                 IndexedByAllIndeces!(FindIndexedBy!Args)()));
 +/
 }
@@ -4958,8 +4958,7 @@ if(IndexedByCount!(Args)() == 1 &&
 
     template ForEachCheckInsert(size_t i, size_t N){
         static if(i < IndexedBy.Indeces.length){
-            static if(i != N && is(typeof({ ThisNode* p; 
-                            index!i._DenyInsertion(p,p);}))){
+            static if(i != N && __traits(hasMember, index!i,"_DenyInsertion")){
                 enum result = (Replace!(q{
                         ThisNode* aY; 
                         bool bY = index!(Y)._DenyInsertion(node,aY);
@@ -4972,8 +4971,8 @@ if(IndexedByCount!(Args)() == 1 &&
     template ForEachDoInsert(size_t i, size_t N){
         static if(i < IndexedBy.Indeces.length){
             static if(i != N){
-                static if(is(typeof({ ThisNode* p; 
-                                index!i._DenyInsertion(p,p);}))){
+                import std.traits;
+                static if(ParameterTypeTuple!(index!i._Insert).length == 2){
                     enum result = Replace!(q{
                         index!(Y)._Insert(node,aY);
                     }, "Y", i) ~ ForEachDoInsert!(i+1,N).result;
@@ -4992,7 +4991,8 @@ if(IndexedByCount!(Args)() == 1 &&
         static if(mutable) {
             node.value = value;
         }else{
-            move(ThisNode(value), *node);
+            auto t = ThisNode(value);
+            move(t, *node);
         }
 
         // connect signals to slots

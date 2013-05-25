@@ -53,7 +53,7 @@ class MyRecord{
         }
     }
 
-    string toString() const{
+    override string toString() const{
         return format("Record(%s)", _i);
     }
 }
