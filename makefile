@@ -6,7 +6,7 @@ DOCS = src/std.ddoc
 
 MI = src/replace.d src/multi_index.d 
 
-all: test_heap test_sequenced test_ra test_ordered test_hashed 
+all: test_heap test_sequenced test_ra test_ordered test_hashed alloc
 	
 clean: 
 	rm -f topo test_heap test_sequenced test_ra test_ordered test_hashed 
@@ -22,6 +22,9 @@ test: test.d $(MI)
 
 mru: unittests/mru.d $(MI)
 	$(DMD) -gc -of$@ $^
+
+alloc: unittests/alloc.d $(MI)
+	$(DMD) -unittest -gc -of$@ $^
 
 const: unittests/const.d $(MI)
 	$(DMD) -gc -of$@ $^

@@ -134,6 +134,10 @@ unittest{
     c.back = 42;
     assert(equal(c[], [4,5,223,9,10,8,42]));
 
+    auto posrng = PSR(c[]);
+    c.replace(posrng.front, 3);
+    assert(equal(c[], [3,5,223,9,10,8,42]));
+
 }
 
 unittest{
@@ -207,6 +211,10 @@ unittest{
     }
     +/
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
+
+    auto posrng = PSR(c[]);
+    c.replace(posrng.front, 3);
+    assert(equal(c[], [3,5,223,-9,-10,-8,67]));
 
 }
 
@@ -298,6 +306,21 @@ unittest{
     +/
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
     assert(equal(d[], [67,-8,1,5,223,-9,-10]));
+
+    auto posrng = PSR(c[]);
+    c.replace(posrng.front, 3);
+    assert(equal(c[], [3,5,223,-9,-10,-8,67]));
+    assert(equal(d[], [67,-8,3,5,223,-9,-10]));
+
+    auto posrng2 = PSR(d[]);
+    d.replace(posrng2.front, 69);
+    assert(equal(c[], [3,5,223,-9,-10,-8,69]));
+    assert(equal(d[], [69,-8,3,5,223,-9,-10]));
+
+    //posrng2.popFront();
+    c.replace(posrng2.front, 70);
+    assert(equal(c[], [3,5,223,-9,-10,-8,70]));
+    assert(equal(d[], [70,-8,3,5,223,-9,-10]));
 }
 
 // again, but with immutable(int)
@@ -367,6 +390,27 @@ unittest{
     c.insertFront([1,5,223,9,10]);
     assert(equal(c[], [1,5,223,9,10,8,67]));
     assert(equal(d[], [67,8,1,5,223,9,10]));
+
+    auto posrng = PSR(c[]);
+    c.replace(posrng.front, 3);
+    assert(equal(c[], [3,5,223,9,10,8,67]));
+    assert(equal(d[], [67,8,3,5,223,9,10]));
+
+    auto rng2 = d[];
+    auto posrng2 = PSR(rng2);
+    assert(!posrng2.empty);
+    assert(!rng2.empty);
+    c.replace(posrng2.front, 69);
+    assert(equal(c[], [3,5,223,9,10,8,69]));
+    assert(equal(d[], [69,8,3,5,223,9,10]));
+
+    rng2.popFront();
+    posrng2.popFront();
+    assert(!rng2.empty);
+    assert(!posrng2.empty);
+    d.replace(posrng2.front, 7);
+    assert(equal(c[], [3,5,223,9,10,7,69]));
+    assert(equal(d[], [69,7,3,5,223,9,10]));
 }
 
 unittest{
@@ -416,6 +460,11 @@ unittest{
     c.back = cast() c.front;
     assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
             new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]));
+
+    auto posrng = PSR(c[]);
+    c.replace(posrng.back, new A(7,3,67.4));
+    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(7,3,67.4)]));
 
     alias MultiIndexContainer!(A, IndexedBy!(Sequenced!()), Allocator, MutableView) C2;
 
@@ -475,6 +524,12 @@ unittest{
     c.back = c.front;
     assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
             cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(2,2,2.2)]));
+
+    auto posrng = PSR(c[]);
+    c.replace(posrng.back, cast(immutable) new _A(7,3,67.4));
+    assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
+            cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(7,3,67.4)]));
+
 
 }
 
