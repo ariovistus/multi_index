@@ -15,7 +15,7 @@ class A {
         i = _i; j = _j; k = _k;
     }
 
-    string toString() {
+    override string toString() {
         return format("A(%s,%s,%s)",i,j,k);
     }
 }

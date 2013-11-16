@@ -60,4 +60,4 @@ test_ordered: unittests/test_ordered.d $(MI)
 	$(DMD) -gc -unittest -oftest_ordered $^ -version=RBDoChecks
 
 test_hashed: unittests/test_hashed.d $(MI)
-	$(DMD) -gc -unittest -oftest_hashed $^
+	$(DMD) -gc -g -unittest -oftest_hashed $^

@@ -135,7 +135,11 @@ unittest{
     assert(equal(c[], [4,5,223,9,10,8,42]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.front, 3);
+    auto replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,9,10,8,42]));
+    replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,9,10,8,42]));
 
 }
@@ -213,7 +217,11 @@ unittest{
     assert(equal(c[], [1,5,223,-9,-10,-8,67]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.front, 3);
+    auto replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,-9,-10,-8,67]));
+    replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,-9,-10,-8,67]));
 
 }
@@ -308,17 +316,34 @@ unittest{
     assert(equal(d[], [67,-8,1,5,223,-9,-10]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.front, 3);
+    auto replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,-9,-10,-8,67]));
+    assert(equal(d[], [67,-8,3,5,223,-9,-10]));
+
+    replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,-9,-10,-8,67]));
     assert(equal(d[], [67,-8,3,5,223,-9,-10]));
 
     auto posrng2 = PSR(d[]);
-    d.replace(posrng2.front, 69);
+    replace_count = d.replace(posrng2.front, 69);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,-9,-10,-8,69]));
     assert(equal(d[], [69,-8,3,5,223,-9,-10]));
 
-    //posrng2.popFront();
-    c.replace(posrng2.front, 70);
+    replace_count = d.replace(posrng2.front, 69);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,-9,-10,-8,69]));
+    assert(equal(d[], [69,-8,3,5,223,-9,-10]));
+
+    replace_count = c.replace(posrng2.front, 70);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,-9,-10,-8,70]));
+    assert(equal(d[], [70,-8,3,5,223,-9,-10]));
+
+    replace_count = c.replace(posrng2.front, 70);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,-9,-10,-8,70]));
     assert(equal(d[], [70,-8,3,5,223,-9,-10]));
 }
@@ -392,7 +417,8 @@ unittest{
     assert(equal(d[], [67,8,1,5,223,9,10]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.front, 3);
+    auto replace_count = c.replace(posrng.front, 3);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,9,10,8,67]));
     assert(equal(d[], [67,8,3,5,223,9,10]));
 
@@ -400,7 +426,13 @@ unittest{
     auto posrng2 = PSR(rng2);
     assert(!posrng2.empty);
     assert(!rng2.empty);
-    c.replace(posrng2.front, 69);
+    replace_count = c.replace(posrng2.front, 69);
+    assert(replace_count == 1);
+    assert(equal(c[], [3,5,223,9,10,8,69]));
+    assert(equal(d[], [69,8,3,5,223,9,10]));
+
+    replace_count = d.replace(posrng2.front, 69);
+    assert(replace_count == 1);
     assert(equal(c[], [3,5,223,9,10,8,69]));
     assert(equal(d[], [69,8,3,5,223,9,10]));
 
@@ -408,7 +440,7 @@ unittest{
     posrng2.popFront();
     assert(!rng2.empty);
     assert(!posrng2.empty);
-    d.replace(posrng2.front, 7);
+    replace_count = d.replace(posrng2.front, 7);
     assert(equal(c[], [3,5,223,9,10,7,69]));
     assert(equal(d[], [69,7,3,5,223,9,10]));
 }
@@ -462,7 +494,13 @@ unittest{
             new A(1,2,3.4), new A(4,55,3.14), new A(2,2,2.2)]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.back, new A(7,3,67.4));
+    auto replace_count = c.replace(posrng.back, new A(7,3,67.4));
+    assert(replace_count == 1);
+    assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
+            new A(1,2,3.4), new A(4,55,3.14), new A(7,3,67.4)]));
+
+    replace_count = c.replace(posrng.back, new A(7,3,67.4));
+    assert(replace_count == 1);
     assert(equal(c[], [new A(2,2,2.2), new A(4,5,1.2), new A(3,2,1.1), 
             new A(1,2,3.4), new A(4,55,3.14), new A(7,3,67.4)]));
 
@@ -526,7 +564,13 @@ unittest{
             cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(2,2,2.2)]));
 
     auto posrng = PSR(c[]);
-    c.replace(posrng.back, cast(immutable) new _A(7,3,67.4));
+    auto replace_count = c.replace(posrng.back, cast(immutable) new _A(7,3,67.4));
+    assert(replace_count == 1);
+    assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
+            cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(7,3,67.4)]));
+
+    replace_count = c.replace(posrng.back, cast(immutable) new _A(7,3,67.4));
+    assert(replace_count == 1);
     assert(equal(c[], [cast(immutable) new _A(2,2,2.2), cast(immutable) new _A(4,5,1.2), cast(immutable) new _A(3,2,1.1), 
             cast(immutable) new _A(1,2,3.4), cast(immutable) new _A(4,2,4.2), cast(immutable) new _A(7,3,67.4)]));
 

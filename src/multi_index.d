@@ -3465,7 +3465,7 @@ Complexity: $(BIGOH 1)
             // node = null -> put value of k in hashes[ix]
             // or node is last node in hashes[ix] chain -> 
             //  put value of k in node.next 
-            bool _find(KeyType k, out inout(ThisNode)* node, out size_t index) inout{
+            bool _find(const(KeyType) k, out inout(ThisNode)* node, out size_t index) inout{
                 index = hash(k)%hashes.length;
                 if(!hashes[index]){
                     node = null;
@@ -3590,6 +3590,8 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
                 static if(allowDuplicates){
                     if(cursor){
                         _Remove(node);
+                        node.index!N.prev = null;
+                        node.index!N.next = null;
                         _Insert(node);
                     }
                 }else{

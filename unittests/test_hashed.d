@@ -35,6 +35,7 @@ unittest{
     assert(4 in c);
     assert(5 in c);
     assert(6 in c);
+    assert(set(c[]) == set([1,2,3,4,5,6]));
     auto t = take(PSR(c[]), 2);
     auto a = array(t);
     c.remove(t);
@@ -45,6 +46,23 @@ unittest{
     assert(8 !in c);
     c.removeKey(5);
     assert(5 !in c);
+
+
+    c.clear();
+    c.insert(iota(10));
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+    r = c.equalRange(5);
+    auto replace_count = c.replace(PSR(r).front, 6);
+    assert(replace_count == 0);
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
+
 }
 
 // again, but with immutable(int)
@@ -75,6 +93,21 @@ unittest{
     assert(8 !in c);
     c.removeKey(5);
     assert(5 !in c);
+
+    c.clear();
+    c.insert(iota(10));
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+    r = c.equalRange(5);
+    auto replace_count = c.replace(PSR(r).front, 6);
+    assert(replace_count == 0);
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
 }
 
 unittest{
@@ -108,6 +141,25 @@ unittest{
     auto sz = c.removeKey(5,5,5);
     assert(5 !in c);
     assert(c.length == 23-sz);
+
+    c.clear();
+    c.insert(iota(10));
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+    r = c.equalRange(5);
+    auto replace_count = c.replace(PSR(r).front, 6);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,6,7,8,9]));
+    assert(c.length == 10);
+
+    r = c.equalRange(6);
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
+    // r is pretty dang invalid now
+    r = c.equalRange(25);
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
 }
 
 // again, but with immutable(int)
@@ -142,6 +194,25 @@ unittest{
     auto sz = c.removeKey(5,5,5);
     assert(5 !in c);
     assert(c.length == 23-sz);
+
+    c.clear();
+    c.insert(iota(10));
+    assert(set(c[]) == set([0,1,2,3,4,5,6,7,8,9]));
+    r = c.equalRange(5);
+    auto replace_count = c.replace(PSR(r).front, 6);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,6,7,8,9]));
+    assert(c.length == 10);
+
+    r = c.equalRange(6);
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
+    // r is pretty dang invalid now
+    r = c.equalRange(25);
+    replace_count = c.replace(PSR(r).front, 25);
+    assert(replace_count == 1);
+    assert(set(c[]) == set([0,1,2,3,4,25,6,7,8,9]));
 }
 
 // tests for removeKey
@@ -274,6 +345,36 @@ unittest{
     assert(8 !in c);
     c.removeKey(5);
     assert(5 !in c);
+}
+
+unittest {
+    import std.typecons;
+    int i = 1;
+    int j = 2;
+    string k = "hi";
+    string m = "bi";
+    alias Tuple!(int*,"i",string,"k") Tup;
+    alias MultiIndexContainer!(Tup, 
+            IndexedBy!(HashedUnique!("a.i"), HashedUnique!("a.k")), Allocator) 
+        C;
+
+    C c = new C();
+    c.get_index!0 .insert(Tup(&i,"hi"));
+    c.get_index!0 .insert(Tup(&j,"bi"));
+    foreach(entry; c.get_index!0 .opSlice()) {
+        writefln(" i=%x, k=%s", entry.i, entry.k);
+    }
+    assert(c.get_index!0 .length == 2);
+    auto r = PSR(c.index!1 .equalRange("bi"));
+    auto replace_count = c.index!0 .replace(r.front, Tup(null, "bi"));
+    assert(replace_count == 1);
+    foreach(entry; c.get_index!0 .opSlice()) {
+        writefln(" i=%x, k=%s", entry.i, entry.k);
+    }
+    r = PSR(c.index!1 .equalRange("bi"));
+    writefln("try to replace bi with %x, bi", &i);
+    replace_count = c.index!0 .replace(r.front, Tup(&j, "bi"));
+    assert(replace_count == 1);
 }
 
 unittest{
