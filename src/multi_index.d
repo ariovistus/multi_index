@@ -5095,8 +5095,8 @@ denied:
 
     // disattach node from all indeces.
     // @@@BUG@@@ cannot pass length directly to _RemoveAllBut
-    auto _RemoveAll(size_t N = -1)(ThisNode* node){
-        static if(N == -1) {
+    auto _RemoveAll(size_t N = size_t.max)(ThisNode* node){
+        static if(N == size_t.max) {
             enum _grr_bugs = IndexedBy.Indeces.length;
             _RemoveAllBut!(_grr_bugs)(node);
         }else {
@@ -5105,7 +5105,7 @@ denied:
         }
         dealloc(node);
 
-        static if(N != -1) {
+        static if(N != size_t.max) {
             return res;
         }
     }
