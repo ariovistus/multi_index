@@ -45,8 +45,8 @@ struct GCAllocator{
 
 }
 
-import std.c.stdlib: malloc, free;
-import std.c.string: memset;
+import core.stdc.stdlib: malloc, free;
+import core.stdc.string: memset;
 import core.memory: GC;
 import core.exception: OutOfMemoryError;
 
@@ -3622,11 +3622,12 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
                         static if(!allowDuplicates){
                             _RemoveAllBut!N(node);
                             return false;
-                        }
-                        if(isFirst(cursor)){
-                            setFirst(node, index);
                         }else{
-                            cursor.index!N.insertPrev(node);
+                            if(isFirst(cursor)){
+                                setFirst(node, index);
+                            }else{
+                                cursor.index!N.insertPrev(node);
+                            }
                         }
                     }else if(cursor){
                         cursor.index!N.insertNext(node);
