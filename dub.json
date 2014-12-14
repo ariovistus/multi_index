@@ -1,0 +1,54 @@
+{
+	"name": "multi_index",
+	"description": "Port of boost::multi_index.",
+	"copyright": "Copyright © 2014, Ellery Newcomer",
+	"authors": ["Ellery Newcomer"],
+        "license": "BSL-1.0",
+        "excludedSourceFiles": ["source/ddoc.d"],
+        "configurations": [
+            {
+                "name": "default",
+                "targetType": "library"
+            },
+            {
+                "name": "test_alloc",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/alloc.d"]
+            },
+            {
+                "name": "test_compatible",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/compatible.d"]
+            },
+            {
+                "name": "test_const",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/const_.d"]
+            },
+            {
+                "name": "test_sequenced",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/test_sequenced.d"]
+            },
+            {
+                "name": "test_ra",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/test_ra.d"]
+            },
+            {
+                "name": "test_ordered",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/test_ordered.d"]
+            },
+            {
+                "name": "test_hashed",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/test_hashed.d"]
+            },
+            {
+                "name": "test_heap",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/test_heap.d"]
+            },
+        ]
+}

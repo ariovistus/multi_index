@@ -205,5 +205,3 @@ unittest{
 mixin Testies!(GCAllocator) a1;
 mixin Testies!(MallocAllocator) a2;
 
-void main(){
-}

@@ -719,4 +719,3 @@ mixin Testsies!(MallocAllocator) Y;
 
 
 
-void main(){}

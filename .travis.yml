@@ -1,0 +1,14 @@
+language: d
+sudo: false
+
+env:
+    - CONFIG: test_alloc
+    - CONFIG: test_compatible
+    - CONFIG: test_const
+    - CONFIG: test_sequenced
+    - CONFIG: test_ra
+    - CONFIG: test_ordered
+    - CONFIG: test_hashed
+    - CONFIG: test_heap
+
+script: dub test --compiler=${DC} --config=${CONFIG}

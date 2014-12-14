@@ -73,4 +73,3 @@ unittest {
     assert(sum==4);
 }
 
-void main(){}

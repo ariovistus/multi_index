@@ -29,5 +29,3 @@ unittest {
     d.fn = { container.replace(PSR(container[]).front, 2); };
 }
 
-void main () {
-}

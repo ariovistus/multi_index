@@ -1636,9 +1636,9 @@ version(PtrHackery){
         return result;
     }
 
-    @property Node parentmost()
+    @property parentmost() inout
     {
-        Node result = &this;
+        auto result = &this;
         while(result.index!N._parent !is null)
             result = result.index!N._parent;
         return result;

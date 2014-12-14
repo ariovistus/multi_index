@@ -1,7 +1,0 @@
-; ignore object files
-syntax: glob
-*.o
-; ignore executables
-syntax: regexp
-; ignores executables in subdirs
-/[^/.]*$

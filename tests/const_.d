@@ -92,20 +92,26 @@ void heap_const_stuff(const Heap_i heap) {
     assert(heap.capacity != 0);
 }
 
-void main(){
+
+unittest {
     SList_i list = new SList_i();
     list.insert([1,2,3,4]);
     seq_const_stuff(list);
+}
 
-
+unittest {
     Tree_i tree = new Tree_i();
     tree.insert([1,2,3,4]);
     tree_const_stuff(tree);
+}
 
+unittest {
     Hash_i hash = new Hash_i();
     hash.insert([1,2,3,4]);
     hashed_const_stuff(hash);
+}
 
+unittest {
     Heap_i heap = new Heap_i();
     heap.insert([1,2,3,4]);
     heap_const_stuff(heap);
