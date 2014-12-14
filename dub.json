@@ -50,5 +50,10 @@
                 "importPaths": ["source", "tests"],
                 "sourceFiles": ["tests/test_heap.d"]
             },
+            {
+                "name": "test_const_tuple",
+                "importPaths": ["source", "tests"],
+                "sourceFiles": ["tests/const_tuple.d"]
+            },
         ]
 }

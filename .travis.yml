@@ -5,6 +5,7 @@ env:
     - CONFIG: test_alloc
     - CONFIG: test_compatible
     - CONFIG: test_const
+    - CONFIG: test_const_tuple
     - CONFIG: test_sequenced
     - CONFIG: test_ra
     - CONFIG: test_ordered
@@ -12,3 +13,7 @@ env:
     - CONFIG: test_heap
 
 script: dub test --compiler=${DC} --config=${CONFIG}
+
+matrix:
+    allow_failures:
+        - env: CONFIG=test_const_tuple

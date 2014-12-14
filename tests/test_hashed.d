@@ -355,7 +355,7 @@ unittest {
     string m = "bi";
     alias Tuple!(int*,"i",string,"k") Tup;
     alias MultiIndexContainer!(Tup, 
-            IndexedBy!(HashedUnique!("a.i"), HashedUnique!("a.k")), Allocator) 
+            IndexedBy!(HashedUnique!("a.i"), HashedUnique!("a.k")), Allocator, MutableView) 
         C;
 
     C c = new C();
@@ -400,5 +400,3 @@ unittest{
 mixin Testsies!(GCAllocator) a1;
 mixin Testsies!(MallocAllocator) a2;
 
-void main(){
-}
