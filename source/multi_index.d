@@ -5115,11 +5115,13 @@ denied:
     template ForEachIndexPosition(size_t i){
         static if(i < IndexedBy.Indeces.length){
             static if(is(typeof(index!i ._NodePosition((ThisNode*).init)))){
+                enum variableDeclarations = Replace!(q{
+                    ThisNode* node$i;
+                }, "$i", i) ~ ForEachIndexPosition!(i+1).variableDeclarations;
                 enum getNodePositions = Replace!(q{
                     auto pos$i = index!$i ._NodePosition(node);
                 }, "$i", i) ~ ForEachIndexPosition!(i+1).getNodePositions;
                 enum gotoDeniedOnInvalid = Replace!(q{
-                    ThisNode* node$i;
                     if(!index!$i ._PositionFixable(node, pos$i, node$i)) 
                         goto denied;
                 }, "$i", i) ~ ForEachIndexPosition!(i+1).gotoDeniedOnInvalid;
@@ -5128,17 +5130,20 @@ denied:
                 }, "$i", i) ~ ForEachIndexPosition!(i+1).fixupIndeces;
             }else{
                 enum getNodePositions = ForEachIndexPosition!(i+1).getNodePositions;
+                enum variableDeclarations = ForEachIndexPosition!(i+1).variableDeclarations;
                 enum gotoDeniedOnInvalid = ForEachIndexPosition!(i+1).gotoDeniedOnInvalid;
                 enum fixupIndeces = ForEachIndexPosition!(i+1).fixupIndeces;
             }
         }else{
             enum getNodePositions = "";
+            enum variableDeclarations = "";
             enum gotoDeniedOnInvalid = "";
             enum fixupIndeces = "";
         }
     }
 
     bool _Replace(ThisNode* node, Value value){
+        mixin(ForEachIndexPosition!0 .variableDeclarations);
         mixin(ForEachIndexPosition!0 .getNodePositions);
         Value old = node.value;
         node.value = value;
@@ -5160,6 +5165,7 @@ Preconditions: mod is a callable of the form void mod(ref Value)
 Complexity: $(BIGOH m(n)) 
 */
     void _Modify(Modifier)(ThisNode* node, Modifier mod){
+        mixin(ForEachIndexPosition!0 .variableDeclarations);
         mixin(ForEachIndexPosition!0 .getNodePositions);
         mod(node.value);
         mixin(ForEachIndexPosition!0 .gotoDeniedOnInvalid);
