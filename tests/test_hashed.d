@@ -395,6 +395,20 @@ unittest{
     c[1].j = 95;
 }
 
+unittest{
+    class A{
+    }
+    alias MultiIndexContainer!(A, IndexedBy!(HashedUnique!()), 
+            MutableView, Allocator) C1;
+    C1 c = new C1();
+    auto a1 = new A();
+    auto a2 = new A();
+    c.insert(a1);
+    c.insert(a2);
+    c.insert(a1);
+    assert(c.length == 2);
+}
+
 }
 
 mixin Testsies!(GCAllocator) a1;
