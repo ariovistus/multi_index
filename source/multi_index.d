@@ -1993,7 +1993,7 @@ Complexity: $(BIGOH 1).
         bool opBinaryRight(string op)(Elem e) const
         if (op == "in") 
         {
-            Node p;
+            const(ThisNode)* p;
             return _find2(key(e),p);
         }
     /++
@@ -2032,9 +2032,9 @@ Complexity:
 $(BIGOH log(n))
 */
         ValueView opIndex(KeyType k) inout{
-            Node n; 
+            inout(ThisNode)* n;
             enforce(_find2(k,n));
-            return n.value;
+            return cast(ValueView) n.value;
         }
     }
 
