@@ -3237,7 +3237,7 @@ static if(size_t.sizeof == 4){
 /// Hash(key) = hash of type size_t 
 /// Eq(key1, key2) determines equality of key1, key2
 template Hashed(bool allowDuplicates = false, alias KeyFromValue="a", 
-        alias Hash="??", alias Eq="a==b") {
+        alias Hash="typeid(a).getHash(&a)", alias Eq="a==b") {
     // this index allocates the table, and an array in removeKey
 
     enum bool BenefitsFromSignals = true;
@@ -3246,18 +3246,9 @@ template Hashed(bool allowDuplicates = false, alias KeyFromValue="a",
     template Inner(ThisContainer, ThisNode, Value, ValueView, size_t N, Allocator) {
         alias unaryFun!KeyFromValue key;
         alias typeof(key(Value.init)) KeyType;
-        static if (Hash == "??") {
-            static if(is(typeof(KeyType.init.toHash()))) {
-                enum _Hash = "a.toHash()";
-            }else{
-                enum _Hash = "typeid(a).getHash(&a)";
-            }
-        }else{
-            enum _Hash = Hash;
-        }
 
         alias TypeTuple!(N) NodeTuple;
-        alias TypeTuple!(N,KeyFromValue, _Hash, Eq, allowDuplicates, 
+        alias TypeTuple!(N,KeyFromValue, Hash, Eq, allowDuplicates, 
                 Sequenced!().Inner!(ThisContainer, ThisNode,Value,ValueView,N,Allocator).SequencedRange, 
                 ThisContainer) IndexTuple;
         // node implementation 
@@ -3489,10 +3480,10 @@ Complexity:
 $(BIGOH n) ($(BIGOH 1) on a good day)
 */
                 ValueView opIndex ( KeyType k ) const{
-                    ThisNode* node;
+                    const(ThisNode)* node;
                     size_t index;
                     enforce(_find(k, node, index));
-                    return node.value;
+                    return cast(ValueView) node.value;
                 }
             }
 
@@ -3519,7 +3510,7 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
             bool opBinaryRight(string op)(ValueView value) const
             if (op == "in")
             {
-                ThisNode* node;
+                const(ThisNode)* node;
                 size_t index;
                 return _find(key(value), node,index);
             }
@@ -3530,7 +3521,7 @@ Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
             bool contains(ValueView value) const{
-                ThisNode* node;
+                const(ThisNode)* node;
                 size_t index;
                 auto r =  _find(key(value), node,index);
                 return r;
@@ -3538,7 +3529,7 @@ $(BIGOH n) ($(BIGOH n 1) on a good day)
 
             ///ditto
             bool contains(KeyType k) const{
-                ThisNode* node;
+                const(ThisNode)* node;
                 size_t index;
                 return _find(k, node,index);
             }
@@ -3664,7 +3655,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 }
             }
             ConstBucketSeqRange equalRange( KeyType k ) const{
-                ThisNode* node;
+                const(ThisNode)* node;
                 size_t index;
                 if(!_find(k, node,index)){
                     return ConstBucketSeqRange(this,null,null);
@@ -3672,7 +3663,7 @@ $(BIGOH n) ($(BIGOH n $(SUB result)) on a good day)
                 static if(!allowDuplicates){
                     return ConstBucketSeqRange(this,node,node);
                 }else{
-                    ThisNode* node2 = node;
+                    const(ThisNode)* node2 = node;
                     while(node2.index!N.next !is null && 
                             eq(k, key(node2.index!N.next.value))){
                         node2 = node2.index!N.next;
@@ -4033,12 +4024,12 @@ $(BIGOH n + n $(SUB k)) for this index ($(BIGOH n $(SUB k)) on a good day)
 
 /// _
 template HashedUnique(alias KeyFromValue="a", 
-        alias Hash="??", alias Eq="a==b"){
+        alias Hash="typeid(a).getHash(&a)", alias Eq="a==b"){
     alias Hashed!(false, KeyFromValue, Hash, Eq) HashedUnique;
 }
 /// _
 template HashedNonUnique(alias KeyFromValue="a", 
-        alias Hash="??", alias Eq="a==b"){
+        alias Hash="typeid(a).getHash(&a)", alias Eq="a==b"){
     alias Hashed!(true, KeyFromValue, Hash, Eq) HashedNonUnique;
 }
 
