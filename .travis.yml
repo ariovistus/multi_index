@@ -17,3 +17,4 @@ script: dub test --compiler=${DC} --config=${CONFIG}
 matrix:
     allow_failures:
         - env: CONFIG=test_const_tuple
+        - env: CONFIG=test_hashed
