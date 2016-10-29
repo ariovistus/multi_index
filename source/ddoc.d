@@ -472,7 +472,7 @@ k in c
 Checks if $(D k) is in the index, where $(D k) is either an element or a key
 )))
 $(TR  $(TD $(D
-c.contains(value)
+c.containsValue(value)
 ))$(TD $(TEXTWITHCOMMAS 
 Checks if $(D value) is in the index. $(BR) EMN: Wat? Wat is this doing in here?
 )))
@@ -2223,7 +2223,7 @@ Reports whether value exists in this collection
 Complexity:
 $(BIGOH n) ($(BIGOH n 1) on a good day)
  */
-            bool contains(ValueView value) const;
+            bool containsValue(ValueView value) const;
 
             /// ditto
             bool contains(KeyType k) const;

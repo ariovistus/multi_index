@@ -2,6 +2,7 @@ import std.stdio;
 import std.algorithm;
 import std.traits;
 import std.range;
+import std.string: format;
 import multi_index;
 
 template Testsies(Allocator) {
