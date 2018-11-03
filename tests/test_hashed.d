@@ -409,6 +409,18 @@ unittest{
     assert(c.length == 2);
 }
 
+unittest{
+    alias MultiIndexContainer!(int, IndexedBy!(HashedNonUnique!("a")), Allocator) C1;
+
+    C1 c = new C1;
+    for(auto i = 0; i < 1000; i++) {
+        c.insert(1);
+        c.insert(1544);
+    }
+
+    assert(c.length == 2000);
+}
+
 }
 
 mixin Testsies!(GCAllocator) a1;
