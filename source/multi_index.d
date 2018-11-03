@@ -2283,7 +2283,7 @@ Complexity: ??
     OrderedRange remove(R)(R r)
     if(is(R == OrderedRange) ||
        is(ElementType!R == Position!ThisNode))
-    out(r){
+    out(r2){
         version(RBDoChecks) _Check();
     }body{
         while(!r.empty) {
