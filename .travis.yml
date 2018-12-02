@@ -1,18 +1,33 @@
 language: d
 sudo: false
-
 env:
-    - CONFIG: test_alloc
-    - CONFIG: test_compatible
-    - CONFIG: test_const
-    - CONFIG: test_const_tuple
-    - CONFIG: test_sequenced
-    - CONFIG: test_ra
-    - CONFIG: test_ordered
-    - CONFIG: test_hashed
-    - CONFIG: test_heap
-
-script: dub test --compiler=${DC} --config=${CONFIG}
-
+- CONFIG: test_alloc
+- CONFIG: test_compatible
+- CONFIG: test_const
+- CONFIG: test_const_tuple
+- CONFIG: test_sequenced
+- CONFIG: test_ra
+- CONFIG: test_ordered
+- CONFIG: test_hashed
+- CONFIG: test_heap
+script:
+- dub test --compiler=${DC} --config=${CONFIG}
 matrix:
-    allow_failures:
+  allow_failures: 
+jobs:
+  include:
+  - stage: deploy
+    script:
+      - bash docker-build-docs.sh
+    deploy:
+      provider: s3
+      bucket: ariovistus-docs
+      upload-dir: multi_index/$TRAVIS_TAG
+      local_dir: docs
+      skip_cleanup: true
+      region: us-east-1
+      on:
+        tags: true
+      access_key_id: AKIAIW4KZXPFCJCA6TIA
+      secret_access_key:
+        secure: R999y0DP9AnBUEL/Yf1xzwVFO7GUHw1EOOoJHKS8z9c5ltAYcOOOge5z3qNuehS2bun74duQs8mClN7kQ3ieD8rHfjGvawnpt/46MLVeelDXa11XOT/CF75J/idL9OnToAK4WGxasyp/cs8r0sidOLT2ncoCbJ6qH1OSkFlJW7w=
