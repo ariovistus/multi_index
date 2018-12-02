@@ -2,6 +2,6 @@
 
 Bringing functionality of boost::multi_index to the D Programming Language.
 
-Documentation at http://ariovistus.bitbucket.org/multi_index.html
+Documentation at https://s3.amazonaws.com/ariovistus-docs/index.html
 
 
