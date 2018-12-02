@@ -12,7 +12,22 @@ env:
     - CONFIG: test_hashed
     - CONFIG: test_heap
 
-script: dub test --compiler=${DC} --config=${CONFIG}
+script: 
+    - dub test --compiler=${DC} --config=${CONFIG}
 
 matrix:
     allow_failures:
+
+deploy:
+  script:
+    - bash docker-build-docs.sh
+  provider: s3
+  # ariovistus-docs-writer
+  access_key_id: AKIAIW4KZXPFCJCA6TIA
+  bucket: ariovistus-docs
+  upload-dir: multi_index/$TRAVIS_TAG
+  local_dir: docs
+  skip_cleanup: true
+  region: us-east-1
+  on:
+      tags: true
