@@ -54,6 +54,6 @@
                 "name": "test_const_tuple",
                 "importPaths": ["source", "tests"],
                 "sourceFiles": ["tests/const_tuple.d"]
-            },
+            }
         ]
 }
