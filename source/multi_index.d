@@ -4039,14 +4039,6 @@ class Position(MNode) {
     alias MNode.ThisContainer.ValueView ValueView;
     alias MNode.ThisContainer.Allocator Allocator;
 
-    new(size_t sz) {
-        void* p = Allocator.allocate!void(sz);
-        return p;
-    }
-    delete(void* p) {
-        Allocator.deallocate(p);
-    }
-
     @property ValueView v() {
         return node.value;
     }
@@ -4900,14 +4892,6 @@ if(IndexedByCount!(Args)() == 1 &&
         }
         object.destroy(node);
         Allocator.deallocate(node);
-    }
-
-    new(size_t sz) {
-        void* p = Allocator.allocate!void(sz);
-        return p;
-    }
-    delete(void* p) {
-        Allocator.deallocate(p);
     }
 
     template ForEachIndex(size_t N,L...){
