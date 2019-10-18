@@ -10,7 +10,7 @@ unittest{
     // ordered unique index only
     alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(0);
     c.insert(2);
     c.check();
@@ -83,7 +83,7 @@ unittest{
     // ordered unique index only
     alias MultiIndexContainer!(immutable(int), IndexedBy!(OrderedUnique!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(0);
     c.insert(2);
     c.check();
@@ -154,7 +154,7 @@ unittest{
 unittest{
     alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!()), Allocator) C1;
     {
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(iota(20));
     assert(c.length == 20);
     assert(equal(c[], [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]));
@@ -171,7 +171,7 @@ unittest{
 
     alias MultiIndexContainer!(string, IndexedBy!(OrderedUnique!()),Allocator) C2;
     {
-    C2 c = new C2;
+    C2 c = C2.create;
     c.insert(["a","g","b","c","z"]);
     assert(equal(c[], ["a","b","c","g","z"]));
     auto i = c.removeKey(["a","z"]);
@@ -183,7 +183,7 @@ unittest{
     }
     // tests from std.container
     {
-    auto rbt = new C2;
+    auto rbt = C2.create;
     rbt.insert(["hello", "world", "foo", "bar"]);
     assert(equal(rbt[], ["bar", "foo", "hello", "world"]));
     assert(rbt.removeKey("hello") == 1);
@@ -196,7 +196,7 @@ unittest{
     assert(rbt.empty);
     }
     {
-    auto rbt = new C1;
+    auto rbt = C1.create;
     rbt.insert([1, 2, 12, 27, 4, 500]);
     assert(equal(rbt[], [1, 2, 4, 12, 27, 500]));
     assert(rbt.removeKey(1u) == 1);
@@ -211,11 +211,11 @@ unittest{
     // end tests from std.container
     {
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!()), Allocator) Ci;
-    auto rbt = new C1;
+    auto rbt = C1.create;
     rbt.insert(iota(20));
 
-    auto keys2 = new C1;
-    auto keys = new Ci;
+    auto keys2 = C1.create;
+    auto keys = Ci.create;
     keys.insert([17,18]);
     keys2.insert([1,2]);
 
@@ -235,7 +235,7 @@ unittest{
     }
     {
         alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!()),Allocator) C5;
-        C5 c = new C5;
+        C5 c = C5.create;
         c.insert([1,2,3,4,4,4,4,5,6,7]);
         assert(equal(c.equalRange(4), [4,4,4,4]));
         auto i = c.removeKey(c.equalRange(4));
@@ -249,7 +249,7 @@ unittest{
 unittest{
     alias MultiIndexContainer!(immutable(int), IndexedBy!(OrderedUnique!()), Allocator) C1;
     {
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(iota(20));
     assert(c.length == 20);
     assert(equal(c[], [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]));
@@ -266,7 +266,7 @@ unittest{
 
     alias MultiIndexContainer!(immutable(string), IndexedBy!(OrderedUnique!()),Allocator) C2;
     {
-    C2 c = new C2;
+    C2 c = C2.create;
     c.insert(["a","g","b","c","z"]);
     assert(equal(c[], ["a","b","c","g","z"]));
     auto i = c.removeKey(["a","z"]);
@@ -278,7 +278,7 @@ unittest{
     }
     // tests from std.container
     {
-    auto rbt = new C2;
+    auto rbt = C2.create;
     rbt.insert(["hello", "world", "foo", "bar"]);
     assert(equal(rbt[], ["bar", "foo", "hello", "world"]));
     assert(rbt.removeKey("hello") == 1);
@@ -291,7 +291,7 @@ unittest{
     assert(rbt.empty);
     }
     {
-    auto rbt = new C1;
+    auto rbt = C1.create;
     rbt.insert([1, 2, 12, 27, 4, 500]);
     assert(equal(rbt[], [1, 2, 4, 12, 27, 500]));
     assert(rbt.removeKey(1u) == 1);
@@ -306,11 +306,11 @@ unittest{
     // end tests from std.container
     {
     alias MultiIndexContainer!(immutable(int), IndexedBy!(Sequenced!()), Allocator) Ci;
-    auto rbt = new C1;
+    auto rbt = C1.create;
     rbt.insert(iota(20));
 
-    auto keys2 = new C1;
-    auto keys = new Ci;
+    auto keys2 = C1.create;
+    auto keys = Ci.create;
     keys.insert([17,18]);
     keys2.insert([1,2]);
 
@@ -330,7 +330,7 @@ unittest{
     }
     {
         alias MultiIndexContainer!(immutable(int), IndexedBy!(OrderedNonUnique!()),Allocator) C5;
-        C5 c = new C5;
+        C5 c = C5.create;
         c.insert([1,2,3,4,4,4,4,5,6,7]);
         assert(equal(c.equalRange(4), [4,4,4,4]));
         auto i = c.removeKey(c.equalRange(4));
@@ -344,7 +344,7 @@ unittest{
     // ordered unique, ordered nonunique
     alias MultiIndexContainer!(int, IndexedBy!(OrderedUnique!(), OrderedNonUnique!("-a")), Allocator) C1;
 
-    C1 a = new C1;
+    C1 a = C1.create;
     auto c = a.get_index!0;
     auto d = a.get_index!1;
     c.insert(0);
@@ -444,7 +444,7 @@ unittest{
 
 unittest{
     alias MultiIndexContainer!(int, IndexedBy!(OrderedNonUnique!()), Allocator) C1;
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert([1,2,3,4,4,4,4,5,6,7]);
     
     assert(c.length == 10);
@@ -464,7 +464,7 @@ unittest{
         }
     }
     alias MultiIndexContainer!(A, IndexedBy!(OrderedUnique!("a.i")), MutableView, Allocator) C1;
-    C1 c = new C1();
+    C1 c = C1.create();
     c.insert(new A(1,2));
     c.front.j = 5;
     c[].front.j = 6;

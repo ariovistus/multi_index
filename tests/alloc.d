@@ -13,18 +13,18 @@ class Destructable {
 
 unittest {
     Destructable d = new Destructable();
-    C container = new C();
+    C container = C.create();
     d.fn = { container.insert(1); };
 }
 unittest {
     Destructable d = new Destructable();
-    C container = new C();
+    C container = C.create();
     container.insert(1);
     d.fn = { container.removeBack(); };
 }
 unittest {
     Destructable d = new Destructable();
-    C container = new C();
+    C container = C.create();
     container.insert(1);
     d.fn = { container.replace(PSR(container[]).front, 2); };
 }

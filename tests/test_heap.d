@@ -63,7 +63,7 @@ unittest{
     // lone heap index
     alias MultiIndexContainer!(int, IndexedBy!(Heap!()), Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(1);
     c.insert(2);
     c.insert(3);
@@ -99,7 +99,7 @@ unittest{
     // lone heap index
     alias MultiIndexContainer!(immutable(int), IndexedBy!(Heap!()), Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(1);
     c.insert(2);
     c.insert(3);
@@ -126,7 +126,7 @@ unittest{
     // lone heap index helper
     alias MultiIndexContainer!(int, IndexedBy!(Heap!()), Allocator) C1;
 
-    C1 d = new C1;
+    C1 d = C1.create;
     auto c = d.get_index!0;
     c.insert(1);
     c.insert(2);
@@ -163,7 +163,7 @@ unittest{
     alias MultiIndexContainer!(int, IndexedBy!(Heap!("a", "a>b"), 
                 Heap!("a", "a<b")), Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     auto min = c.get_index!0;
     auto max = c.get_index!1;
     min.insert(1);
@@ -217,7 +217,7 @@ unittest{
             Allocator,
             ) MyContainer;
 
-    MyContainer c = new MyContainer;
+    MyContainer c = MyContainer.create;
     c.insert(map!(function(int i){return new MyRecord(i);})(iota(20)));
 
     writeln(c[]);

@@ -8,7 +8,7 @@ unittest{
     // ra index only
     alias MultiIndexContainer!(int, IndexedBy!(RandomAccess!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(1);
     c.insert(2);
     c.insert(3);
@@ -43,7 +43,7 @@ unittest{
     // ra index only
     alias MultiIndexContainer!(immutable(int), IndexedBy!(RandomAccess!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(1);
     c.insert(2);
     c.insert(3);
@@ -75,7 +75,7 @@ unittest{
     alias MultiIndexContainer!(int, IndexedBy!(RandomAccess!(), 
                 RandomAccess!()),Allocator) C1;
 
-    C1 a = new C1;
+    C1 a = C1.create;
     auto c = a.get_index!0;
     auto d = a.get_index!1;
 
@@ -136,7 +136,7 @@ unittest{
     alias MultiIndexContainer!(immutable(int), IndexedBy!(RandomAccess!(), 
                 RandomAccess!()),Allocator) C1;
 
-    C1 a = new C1;
+    C1 a = C1.create;
     auto c = a.get_index!0;
     auto d = a.get_index!1;
 
@@ -192,7 +192,7 @@ unittest{
     }
     alias MultiIndexContainer!(A, IndexedBy!(RandomAccess!()),
             MutableView, Allocator) C1;
-    C1 c = new C1();
+    C1 c = C1.create();
     c.insert(new A(1,2));
     c.front.j = 5;
     c[].front.j = 6;

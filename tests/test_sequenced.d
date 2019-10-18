@@ -10,7 +10,7 @@ unittest{
     // sequenced index only
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create();
     c.insert(1);
     c.insert(2);
     c.insert(1);
@@ -87,7 +87,7 @@ unittest{
     // sequenced index only
     alias MultiIndexContainer!(immutable(int), IndexedBy!(Sequenced!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create();
     c.insert(1);
     c.insert(2);
     c.insert(1);
@@ -153,7 +153,7 @@ unittest{
             Allocator,
             ) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create();
     c.insert(1);
     c.insert(2);
     c.insert(1);
@@ -231,7 +231,7 @@ unittest{
     // sequenced, sequenced
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(), Sequenced!()), Allocator) C1;
 
-    C1 a = new C1;
+    C1 a = C1.create();
     auto c = a.get_index!0;
     auto d = a.get_index!1;
     c.insert(1);
@@ -354,7 +354,7 @@ unittest{
     // sequenced, sequenced
     alias MultiIndexContainer!(immutable(int), IndexedBy!(Sequenced!(), Sequenced!()), Allocator) C1;
 
-    C1 a = new C1;
+    C1 a = C1.create();
     auto c = a.get_index!0;
     auto d = a.get_index!1;
     c.insert(1);
@@ -469,7 +469,7 @@ unittest{
 
     alias MultiIndexContainer!(A, IndexedBy!(Sequenced!()), Allocator) C;
 
-    C c = new C;
+    C c = C.create();
 
     c.insert(new A(1,2,3.4));
     c.insert(new A(4,2,4.2));
@@ -507,7 +507,7 @@ unittest{
 
     alias MultiIndexContainer!(A, IndexedBy!(Sequenced!()), Allocator, MutableView) C2;
 
-    C2 c2 = new C2();
+    C2 c2 = C2.create();
     c2.insert(new A(1,2,3.4));
     c2.front.j = 4;
     c2[].front.j = 5;
@@ -540,7 +540,7 @@ unittest{
     alias immutable(_A) A;
     alias MultiIndexContainer!(A, IndexedBy!(Sequenced!()), Allocator) C;
 
-    C c = new C;
+    C c = C.create;
 
     c.insert( cast(immutable) new _A(1,2,3.4));
     c.insert( cast(immutable) new _A(4,2,4.2));
@@ -582,7 +582,7 @@ unittest{
 unittest{
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(iota(20));
     auto r = c[];
     while(r.empty == false){
@@ -633,7 +633,7 @@ unittest{
 
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(),OrderedUnique!()),Allocator) C2;
 
-    C2 z = new C2;
+    C2 z = C2.create;
     auto z0 = z.get_index!0;
     auto z1 = z.get_index!1;
     z0.insert(c0);
@@ -650,7 +650,7 @@ unittest{
 unittest{
     alias MultiIndexContainer!(immutable(int), IndexedBy!(Sequenced!()),Allocator) C1;
 
-    C1 c = new C1;
+    C1 c = C1.create;
     c.insert(iota(20));
     auto r = c[];
     while(r.empty == false){
@@ -701,7 +701,7 @@ unittest{
 
     alias MultiIndexContainer!(int, IndexedBy!(Sequenced!(),OrderedUnique!()),Allocator) C2;
 
-    C2 z = new C2;
+    C2 z = C2.create;
     auto z0 = z.get_index!0;
     auto z1 = z.get_index!1;
     z0.insert(c0);
