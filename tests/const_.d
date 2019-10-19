@@ -94,25 +94,25 @@ void heap_const_stuff(const Heap_i heap) {
 
 
 unittest {
-    SList_i list = new SList_i();
+    SList_i list = SList_i.create();
     list.insert([1,2,3,4]);
     seq_const_stuff(list);
 }
 
 unittest {
-    Tree_i tree = new Tree_i();
+    Tree_i tree = Tree_i.create();
     tree.insert([1,2,3,4]);
     tree_const_stuff(tree);
 }
 
 unittest {
-    Hash_i hash = new Hash_i();
+    Hash_i hash = Hash_i.create();
     hash.insert([1,2,3,4]);
     hashed_const_stuff(hash);
 }
 
 unittest {
-    Heap_i heap = new Heap_i();
+    Heap_i heap = Heap_i.create();
     heap.insert([1,2,3,4]);
     heap_const_stuff(heap);
 }

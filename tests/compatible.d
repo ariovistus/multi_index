@@ -27,7 +27,7 @@ alias MultiIndexContainer!(A,
                 MultiCompare!("a.i","a.j","a.k")))) Set1;
 
 unittest {
-    Set1 s = new Set1();
+    Set1 s = Set1.create();
     // incidentally, following items appear in order inserted
     s.insert(new A(1,2.2,5));
     s.insert(new A(1,2.3,5));
